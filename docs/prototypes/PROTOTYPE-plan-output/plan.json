@@ -1,0 +1,295 @@
+{
+  "$schema": "https://setpoint.dev/schema/v1/plan.json",
+  "formatVersion": 1,
+  "setpointVersion": "0.1.0",
+  "createdAt": "2026-11-08T12:00:00Z",
+  "policy": {
+    "hash": "sha256:700dc9956fa84b9e",
+    "files": 5,
+    "commit": "3f9c2a1"
+  },
+  "options": {
+    "strict": false,
+    "skipUnreachable": false,
+    "maxChanges": 25
+  },
+  "targets": [
+    {
+      "name": "ado-onprem",
+      "platform": "azuredevops",
+      "detected": "Azure DevOps Server 2022.1",
+      "apiVersion": "7.0"
+    },
+    {
+      "name": "ado-cloud",
+      "platform": "azuredevops",
+      "detected": "Azure DevOps Services",
+      "apiVersion": "7.0"
+    },
+    {
+      "name": "github",
+      "platform": "github",
+      "detected": "github.com (Free)",
+      "apiVersion": "2022-11-28"
+    }
+  ],
+  "repos": [
+    {
+      "target": "ado-onprem",
+      "path": "Payments/payments-api",
+      "status": "changes",
+      "layers": [
+        "baseline",
+        "payments"
+      ],
+      "objects": [
+        {
+          "key": "ado:policy/17",
+          "operation": "update",
+          "fingerprint": "sha256:66ce6a05ba3987b5",
+          "payload": {
+            "isEnabled": true,
+            "isBlocking": true
+          }
+        },
+        {
+          "key": "ado:new/build/payments-ci",
+          "operation": "create",
+          "fingerprint": "sha256:2b3c7af40e95cb9d",
+          "payload": {
+            "isEnabled": true,
+            "isBlocking": true
+          }
+        },
+        {
+          "key": "ado:policy/19",
+          "operation": "update",
+          "fingerprint": "sha256:fe90df63cb4d2a4a",
+          "payload": {
+            "isEnabled": true,
+            "isBlocking": true
+          }
+        }
+      ],
+      "changes": [
+        {
+          "rule": "minimumReviewers.count",
+          "action": "update",
+          "from": "1",
+          "to": "2",
+          "layer": "baseline",
+          "locked": true,
+          "object": "ado:policy/17"
+        },
+        {
+          "rule": "minimumReviewers.resetOnPush",
+          "action": "update",
+          "from": "false",
+          "to": "true",
+          "layer": "baseline",
+          "locked": true,
+          "object": "ado:policy/17"
+        },
+        {
+          "rule": "requiredChecks",
+          "action": "create",
+          "from": "(none)",
+          "to": "payments-ci",
+          "layer": "payments",
+          "locked": false,
+          "object": "ado:new/build/payments-ci"
+        },
+        {
+          "rule": "allowedMergeTypes",
+          "action": "update",
+          "from": "merge, squash, rebase",
+          "to": "squash",
+          "layer": "payments",
+          "locked": false,
+          "object": "ado:policy/19"
+        }
+      ],
+      "unmanagedCount": 2,
+      "warnings": []
+    },
+    {
+      "target": "ado-onprem",
+      "path": "Payments/legacy-ledger",
+      "status": "changes",
+      "layers": [
+        "baseline",
+        "payments",
+        "repo"
+      ],
+      "objects": [
+        {
+          "key": "ado:policy/23",
+          "operation": "delete",
+          "fingerprint": "sha256:86ec424b6e96371e"
+        },
+        {
+          "key": "ado:policy/24",
+          "operation": "update",
+          "fingerprint": "sha256:b3a388657b92477e",
+          "payload": {
+            "isEnabled": true,
+            "isBlocking": true
+          }
+        }
+      ],
+      "changes": [
+        {
+          "rule": "requireCommentResolution",
+          "action": "remove",
+          "from": "true",
+          "to": "(removed)",
+          "layer": "repo",
+          "locked": false,
+          "object": "ado:policy/23"
+        },
+        {
+          "rule": "allowedMergeTypes",
+          "action": "update",
+          "from": "merge, squash, rebase",
+          "to": "merge, squash",
+          "layer": "repo",
+          "locked": false,
+          "object": "ado:policy/24"
+        }
+      ],
+      "unmanagedCount": 3,
+      "warnings": []
+    },
+    {
+      "target": "ado-onprem",
+      "path": "Platform/build-tools",
+      "status": "insync",
+      "layers": [
+        "baseline"
+      ],
+      "objects": [],
+      "changes": [],
+      "unmanagedCount": 1,
+      "warnings": [
+        {
+          "code": "SP2201",
+          "message": "minimumReviewers: 2 live policies match type \u002B branch main (#31, #32); left alone"
+        }
+      ]
+    },
+    {
+      "target": "ado-cloud",
+      "path": "Web/storefront",
+      "status": "insync",
+      "layers": [
+        "baseline"
+      ],
+      "objects": [],
+      "changes": [],
+      "unmanagedCount": 0,
+      "warnings": []
+    },
+    {
+      "target": "github",
+      "path": "quattordici/docs-site",
+      "status": "changes",
+      "layers": [
+        "baseline"
+      ],
+      "objects": [
+        {
+          "key": "gh:ruleset/setpoint",
+          "operation": "create",
+          "fingerprint": "sha256:34a32c64b9363ea0",
+          "payload": {
+            "name": "setpoint",
+            "target": "branch",
+            "enforcement": "active"
+          }
+        }
+      ],
+      "changes": [
+        {
+          "rule": "minimumReviewers",
+          "action": "create",
+          "from": "(none)",
+          "to": "count 2, resetOnPush",
+          "layer": "baseline",
+          "locked": true,
+          "object": "gh:ruleset/setpoint"
+        },
+        {
+          "rule": "requireCommentResolution",
+          "action": "create",
+          "from": "(none)",
+          "to": "true",
+          "layer": "baseline",
+          "locked": false,
+          "object": "gh:ruleset/setpoint"
+        },
+        {
+          "rule": "allowedMergeTypes",
+          "action": "create",
+          "from": "(none)",
+          "to": "squash, rebase",
+          "layer": "baseline",
+          "locked": false,
+          "object": "gh:ruleset/setpoint"
+        },
+        {
+          "rule": "protectFromForcePushAndDelete",
+          "action": "create",
+          "from": "(none)",
+          "to": "true",
+          "layer": "baseline",
+          "locked": true,
+          "object": "gh:ruleset/setpoint"
+        },
+        {
+          "rule": "github.pullRequest.requireCodeOwnerReview",
+          "action": "create",
+          "from": "(none)",
+          "to": "false",
+          "layer": "baseline",
+          "locked": false,
+          "object": "gh:ruleset/setpoint"
+        }
+      ],
+      "unmanagedCount": 1,
+      "warnings": [
+        {
+          "code": "SP2101",
+          "message": "minimumReviewers: unmanaged ruleset \u0027org-protect\u0027 requires 3 approvals; effective value is 3, not 2"
+        }
+      ]
+    },
+    {
+      "target": "github",
+      "path": "quattordici/payments-gateway",
+      "status": "skipped",
+      "layers": [
+        "baseline",
+        "payments"
+      ],
+      "objects": [],
+      "changes": [],
+      "unmanagedCount": 0,
+      "warnings": [
+        {
+          "code": "SP3001",
+          "message": "private repo on GitHub Free: rulesets unavailable, skipped (--strict fails)"
+        }
+      ]
+    }
+  ],
+  "summary": {
+    "reposChanged": 3,
+    "create": 6,
+    "update": 4,
+    "remove": 1,
+    "inSync": 2,
+    "skipped": 1,
+    "unmanaged": 7,
+    "warnings": 3
+  }
+}
