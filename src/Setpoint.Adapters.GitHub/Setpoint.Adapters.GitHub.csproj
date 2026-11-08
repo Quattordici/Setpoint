@@ -4,5 +4,6 @@
   </PropertyGroup>
   <ItemGroup>
     <ProjectReference Include="..\Setpoint.Core\Setpoint.Core.csproj" />
+    <ProjectReference Include="..\Setpoint.Http\Setpoint.Http.csproj" />
   </ItemGroup>
 </Project>

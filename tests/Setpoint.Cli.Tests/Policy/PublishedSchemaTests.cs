@@ -11,7 +11,7 @@ namespace Setpoint.Cli.Tests.Policy;
 public sealed class PublishedSchemaTests
 {
     public static TheoryData<string> SchemaFiles =>
-        [PolicySchemaGenerator.TargetsSchemaFileName, PolicySchemaGenerator.LayerSchemaFileName];
+        [PolicySchemaGenerator.TargetsSchemaFileName, PolicySchemaGenerator.LayerSchemaFileName, PolicySchemaGenerator.PlanSchemaFileName];
 
     /// <summary>
     /// Given the committed schema file,
@@ -24,9 +24,12 @@ public sealed class PublishedSchemaTests
     {
         // Arrange
         string committedPath = Path.Combine(RepoRoot(), "schema", "v1", fileName);
-        string generated = PolicySchemaGenerator.Serialize(fileName == PolicySchemaGenerator.TargetsSchemaFileName
-            ? PolicySchemaGenerator.TargetsSchema()
-            : PolicySchemaGenerator.LayerSchema(ProviderBlocks.All));
+        string generated = PolicySchemaGenerator.Serialize(fileName switch
+        {
+            PolicySchemaGenerator.TargetsSchemaFileName => PolicySchemaGenerator.TargetsSchema(),
+            PolicySchemaGenerator.PlanSchemaFileName => PolicySchemaGenerator.PlanSchema(),
+            _ => PolicySchemaGenerator.LayerSchema(ProviderBlocks.All),
+        });
 
         if (Environment.GetEnvironmentVariable("SETPOINT_UPDATE_SCHEMA") == "1")
         {

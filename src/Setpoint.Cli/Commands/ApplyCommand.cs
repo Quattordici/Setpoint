@@ -31,6 +31,7 @@ internal static class ApplyCommand
             CommonOptions.Output(),
             CommonOptions.SkipUnreachable(),
             CommonOptions.AllowUnsupportedServer(),
+            CommonOptions.Record(),
         };
 
         command.Validators.Add(result =>

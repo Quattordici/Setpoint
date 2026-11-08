@@ -5,7 +5,6 @@ using Setpoint.Core;
 using Setpoint.Core.Diagnostics;
 using Setpoint.Core.Policy.Loading;
 using Setpoint.Core.Policy.Model;
-using Setpoint.Core.Policy.Validation;
 using Spectre.Console;
 
 namespace Setpoint.Cli.Commands;
@@ -38,14 +37,7 @@ internal static class ValidateCommand
     /// <summary>Loads and validates the policy repo, prints what it finds, and returns the exit code.</summary>
     internal static ExitCode Run(CliConsole console, DirectoryInfo policyDirectory, bool strict, OutputFormat format)
     {
-        PolicyLoadResult load = new PolicyRepoLoader(ProviderBlocks.All).LoadDirectory(policyDirectory.FullName);
-        IEnumerable<Diagnostic> found = load.Diagnostics;
-        if (load.Repo is not null)
-        {
-            found = found.Concat(new PolicyValidator(ProviderBlocks.All).Validate(load.Repo));
-        }
-
-        IReadOnlyList<Diagnostic> diagnostics = DiagnosticList.ApplyStrict(found, strict);
+        (PolicyLoadResult load, IReadOnlyList<Diagnostic> diagnostics) = PolicyGate.Check(policyDirectory, strict);
         DiagnosticRenderer.Write(console, diagnostics, format);
 
         int errors = diagnostics.Count(d => d.Severity == DiagnosticSeverity.Error);

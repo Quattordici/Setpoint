@@ -13,6 +13,9 @@ public sealed record PolicySourceFile(string Path, string Text);
 /// <param name="Diagnostics">Everything found, in file order.</param>
 public sealed record PolicyLoadResult(PolicyRepo? Repo, IReadOnlyList<Diagnostic> Diagnostics)
 {
+    /// <summary>The files that were read, ordered by path. The plan's policy hash is taken over them.</summary>
+    public IReadOnlyList<PolicySourceFile> Sources { get; init; } = [];
+
     /// <summary>True when any diagnostic is an error.</summary>
     public bool HasErrors => Diagnostics.Any(d => d.Severity == DiagnosticSeverity.Error);
 }
@@ -69,13 +72,14 @@ public sealed class PolicyRepoLoader(IReadOnlyList<IProviderBlockDefinition> pro
     /// <summary>Loads a policy repo from files already in memory.</summary>
     public PolicyLoadResult Load(IEnumerable<PolicySourceFile> files)
     {
+        IReadOnlyList<PolicySourceFile> sources = [.. files.OrderBy(f => f.Path, StringComparer.Ordinal)];
         var diagnostics = new List<Diagnostic>();
         PolicyFile<TargetsFile>? targets = null;
         PolicyFile<PolicyLayer>? baseline = null;
         var groups = new List<PolicyFile<PolicyLayer>>();
         var repoOverrides = new List<PolicyFile<PolicyLayer>>();
 
-        foreach (PolicySourceFile file in files.OrderBy(f => f.Path, StringComparer.Ordinal))
+        foreach (PolicySourceFile file in sources)
         {
             string[] segments = file.Path.Split('/');
 
@@ -140,7 +144,7 @@ public sealed class PolicyRepoLoader(IReadOnlyList<IProviderBlockDefinition> pro
         PolicyRepo? repo = hasErrors || targets is null || baseline is null
             ? null
             : new PolicyRepo { Targets = targets, Baseline = baseline, Groups = groups, RepoOverrides = repoOverrides };
-        return new PolicyLoadResult(repo, diagnostics);
+        return new PolicyLoadResult(repo, diagnostics) { Sources = sources };
     }
 
     private PolicyFile<PolicyLayer>? ParseLayer(PolicySourceFile file, LayerKind expected, List<Diagnostic> diagnostics)

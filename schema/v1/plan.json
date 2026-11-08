@@ -1,0 +1,353 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://raw.githubusercontent.com/Quattordici/Setpoint/main/schema/v1/plan.json",
+  "title": "Setpoint plan",
+  "description": "A Setpoint plan: the native objects apply will write, with fingerprints for the stale check, and the neutral changes for people.",
+  "type": "object",
+  "properties": {
+    "$schema": {
+      "type": "string"
+    },
+    "formatVersion": {
+      "type": "integer",
+      "description": "The plan file format version. Always 1."
+    },
+    "setpointVersion": {
+      "type": "string",
+      "description": "The Setpoint version that made the plan. apply refuses a plan made by another version."
+    },
+    "createdAt": {
+      "type": "string",
+      "format": "date-time",
+      "description": "When the plan was made, in UTC."
+    },
+    "policy": {
+      "type": "object",
+      "properties": {
+        "hash": {
+          "type": "string",
+          "description": "SHA-256 over every policy file's path and text, with line endings normalised."
+        },
+        "files": {
+          "type": "integer",
+          "description": "How many policy files were read."
+        },
+        "commit": {
+          "type": [
+            "string",
+            "null"
+          ],
+          "description": "The policy repo commit, when known."
+        }
+      },
+      "required": [
+        "hash",
+        "files",
+        "commit"
+      ],
+      "additionalProperties": false
+    },
+    "options": {
+      "type": "object",
+      "properties": {
+        "strict": {
+          "type": "boolean"
+        },
+        "skipUnreachable": {
+          "type": "boolean"
+        },
+        "allowUnsupportedServer": {
+          "type": "boolean"
+        }
+      },
+      "required": [
+        "strict",
+        "skipUnreachable",
+        "allowUnsupportedServer"
+      ],
+      "additionalProperties": false
+    },
+    "targets": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "properties": {
+          "name": {
+            "type": "string"
+          },
+          "platform": {
+            "enum": [
+              "github",
+              "azuredevops"
+            ]
+          },
+          "detected": {
+            "type": "string"
+          },
+          "apiVersion": {
+            "type": "string"
+          },
+          "auth": {
+            "enum": [
+              "pat",
+              "accessToken",
+              "integrated",
+              "app",
+              "entra"
+            ]
+          },
+          "identity": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "repoCount": {
+            "type": "integer"
+          }
+        },
+        "required": [
+          "name",
+          "platform",
+          "detected",
+          "apiVersion",
+          "auth",
+          "identity",
+          "repoCount"
+        ],
+        "additionalProperties": false
+      }
+    },
+    "repos": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "properties": {
+          "target": {
+            "type": "string"
+          },
+          "path": {
+            "type": "string"
+          },
+          "status": {
+            "enum": [
+              "changes",
+              "insync",
+              "skipped",
+              "error"
+            ]
+          },
+          "layers": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          },
+          "objects": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "properties": {
+                "key": {
+                  "type": "string"
+                },
+                "operation": {
+                  "enum": [
+                    "create",
+                    "update",
+                    "delete"
+                  ]
+                },
+                "fingerprint": {
+                  "type": "string"
+                },
+                "matchKey": {
+                  "type": "string"
+                },
+                "payload": {
+                  "default": null
+                }
+              },
+              "required": [
+                "key",
+                "operation",
+                "fingerprint",
+                "matchKey"
+              ],
+              "additionalProperties": false
+            }
+          },
+          "changes": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "properties": {
+                "rule": {
+                  "type": "string"
+                },
+                "action": {
+                  "enum": [
+                    "create",
+                    "update",
+                    "remove"
+                  ]
+                },
+                "from": {
+                  "type": "string"
+                },
+                "to": {
+                  "type": "string"
+                },
+                "layer": {
+                  "type": "string"
+                },
+                "locked": {
+                  "type": "boolean"
+                },
+                "object": {
+                  "type": "string"
+                }
+              },
+              "required": [
+                "rule",
+                "action",
+                "from",
+                "to",
+                "layer",
+                "locked",
+                "object"
+              ],
+              "additionalProperties": false
+            }
+          },
+          "unmanaged": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "properties": {
+                "rule": {
+                  "type": "string"
+                },
+                "source": {
+                  "type": "string"
+                },
+                "value": {
+                  "type": "string"
+                }
+              },
+              "required": [
+                "rule",
+                "source",
+                "value"
+              ],
+              "additionalProperties": false
+            }
+          },
+          "unmanagedCount": {
+            "type": "integer"
+          },
+          "diagnostics": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "properties": {
+                "code": {
+                  "type": "string"
+                },
+                "severity": {
+                  "enum": [
+                    "info",
+                    "warning",
+                    "error"
+                  ]
+                },
+                "message": {
+                  "type": "string"
+                }
+              },
+              "required": [
+                "code",
+                "severity",
+                "message"
+              ],
+              "additionalProperties": false
+            }
+          }
+        },
+        "required": [
+          "target",
+          "path",
+          "status",
+          "layers",
+          "objects",
+          "changes",
+          "unmanaged",
+          "diagnostics"
+        ],
+        "additionalProperties": false
+      }
+    },
+    "diagnostics": {
+      "type": "array",
+      "items": {
+        "$ref": "#/properties/repos/items/properties/diagnostics/items"
+      }
+    },
+    "summary": {
+      "type": "object",
+      "properties": {
+        "reposChanged": {
+          "type": "integer"
+        },
+        "create": {
+          "type": "integer"
+        },
+        "update": {
+          "type": "integer"
+        },
+        "remove": {
+          "type": "integer"
+        },
+        "inSync": {
+          "type": "integer"
+        },
+        "skipped": {
+          "type": "integer"
+        },
+        "errors": {
+          "type": "integer"
+        },
+        "unmanaged": {
+          "type": "integer"
+        },
+        "warnings": {
+          "type": "integer"
+        }
+      },
+      "required": [
+        "reposChanged",
+        "create",
+        "update",
+        "remove",
+        "inSync",
+        "skipped",
+        "errors",
+        "unmanaged",
+        "warnings"
+      ],
+      "additionalProperties": false
+    }
+  },
+  "required": [
+    "formatVersion",
+    "setpointVersion",
+    "createdAt",
+    "policy",
+    "options",
+    "targets",
+    "repos",
+    "diagnostics",
+    "summary"
+  ],
+  "additionalProperties": false
+}
