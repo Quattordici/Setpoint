@@ -87,6 +87,12 @@ internal sealed class FakeProviderAdapter(Platform platform = Platform.GitHub, I
     public Task<ApplyResult> ApplyAsync(RepoRef repo, RepoChangeSet changes, CancellationToken cancellationToken)
     {
         Applied.Add((repo, changes));
+        if (_repos[repo].ApplyFailure is { } failure)
+        {
+            // The first write fails and the rest are not attempted, as a real adapter stops a repo.
+            return Task.FromResult(new ApplyResult([new ObjectApplyOutcome(changes.Objects[0].Key, false, failure)]));
+        }
+
         return Task.FromResult(new ApplyResult([.. changes.Objects.Select(o => new ObjectApplyOutcome(o.Key, true))]));
     }
 
@@ -110,6 +116,9 @@ internal sealed class FakeProviderAdapter(Platform platform = Platform.GitHub, I
         public Diagnostic? CapabilitySkip { get; set; }
 
         public Exception? ReadFailure { get; set; }
+
+        /// <summary>Set to make the repo's first write fail with this error.</summary>
+        public string? ApplyFailure { get; set; }
 
         /// <summary>Adds a live object carrying <paramref name="rule"/>, with its value as JSON text.</summary>
         public FakeRepo WithLive(string rule, string json)

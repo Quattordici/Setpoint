@@ -4,7 +4,7 @@ Setpoint, repository governance as code for GitHub and Azure DevOps.
 
 Declare pull-request rules once in YAML, in a central policy repo, and Setpoint brings every repository on GitHub, Azure DevOps Services and Azure DevOps Server 2022 in line with them, through `validate`, `plan` and `apply`.
 
-> **Status:** early development. `validate` works; `plan` and `apply` don't do anything yet. Progress is tracked in [the MVP build issue](https://github.com/Quattordici/Setpoint/issues/24).
+> **Status:** early development. `validate`, `plan` and `apply` work against GitHub; Azure DevOps can be planned, and writing to it lands next. Progress is tracked in [the MVP build issue](https://github.com/Quattordici/Setpoint/issues/24).
 
 ## Commands
 
@@ -14,6 +14,26 @@ Declare pull-request rules once in YAML, in a central policy repo, and Setpoint 
 | `setpoint plan [--out plan.json] [--json] [--exit-code]` | Reads live state and shows the changes apply would make |
 | `setpoint apply plan.json` | Applies a saved plan, after checking nothing moved since it was made |
 | `setpoint apply --yes` | Re-plans and applies in one step |
+
+## Applying safely
+
+`apply` checks everything before its first write, and writes nothing if any check fails:
+
+1. The plan was made by this Setpoint version from the policy files as they are now (otherwise exit 3, `SP4001`).
+2. It changes no more repos than `--max-changes` allows, 25 by default; `--max-changes 0` removes the limit (otherwise exit 4, `SP4002`).
+3. With `--strict`, the plan has no warnings.
+4. Every target is reachable. `--skip-unreachable` leaves an unreachable target's repos out with a warning.
+5. Every planned object is still exactly as planned: its fingerprint matches, it still exists, and nothing has appeared where the plan creates something (otherwise exit 3, `SP4001`). Plan again.
+
+Then each repo is written in plan order. A failed write stops that repo and the others carry on, so apply exits 1 with `SP1003`; `--fail-fast` stops the whole run at the first failure. apply prints one line per repo and a summary line:
+
+```text
+applied        github/acme/payments-api  2 of 2 written
+failed         github/acme/web  0 of 1 written; the rest not attempted
+apply: repos applied=1 failed=1 not_attempted=0 skipped=0 objects_written=2
+```
+
+The plan file format is described in [docs/plan-file.md](docs/plan-file.md).
 
 ## Diagnostics
 

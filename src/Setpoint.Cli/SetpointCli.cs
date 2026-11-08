@@ -24,7 +24,7 @@ internal static class SetpointCli
             new VersionOption(),
             ValidateCommand.Create(console),
             PlanCommand.Create(console, services),
-            ApplyCommand.Create(console),
+            ApplyCommand.Create(console, services),
         };
 
     /// <summary>

@@ -146,8 +146,8 @@ public sealed class SetpointCliTests
         CliRun run = await CliRun.InvokeAsync(args);
 
         // Assert
-        run.ExitCode.ShouldNotBe(ExitCode.InvalidPolicyOrUsage);
-        run.Error.ShouldContain("not implemented yet");
+        run.Error.ShouldNotContain("for usage.");
+        run.Error.ShouldNotContain("pass --yes");
     }
 
     /// <summary>
