@@ -1,5 +1,12 @@
 <Project Sdk="Microsoft.NET.Sdk">
   <ItemGroup>
+    <PackageReference Include="WireMock.Net" />
+  </ItemGroup>
+  <ItemGroup>
     <ProjectReference Include="..\..\src\Setpoint.Adapters.AzureDevOps\Setpoint.Adapters.AzureDevOps.csproj" />
+  </ItemGroup>
+  <ItemGroup>
+    <Compile Include="..\Setpoint.Http.Tests\TestSupport\WireMockServerFactory.cs" Link="TestSupport\WireMockServerFactory.cs" />
+    <Compile Include="..\Setpoint.Http.Tests\TestSupport\WireMockPortAllocator.cs" Link="TestSupport\WireMockPortAllocator.cs" />
   </ItemGroup>
 </Project>
