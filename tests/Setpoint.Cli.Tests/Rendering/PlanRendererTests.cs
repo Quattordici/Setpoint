@@ -153,7 +153,7 @@ public sealed class PlanRendererTests
         PlanRenderer.Write(Console, Sample(), OutputFormat.Plain, verbose: false, savedTo: "plan.json");
 
         // Assert
-        string[] lines = _plain.ToString().Split('\n', StringSplitOptions.RemoveEmptyEntries);
+        string[] lines = _plain.ToString().Split(['\r', '\n'], StringSplitOptions.RemoveEmptyEntries);
         lines.ShouldContain("setpoint 0.1.0-alpha plan policy=3f9c2a1 files=5 repos=4");
         lines.ShouldContain(@"target ado-onprem detected=""Azure DevOps Server 2022.1"" api=7.0 auth=integrated identity=CONTOSO\setpoint-svc repos=3");
         lines.ShouldContain("~ ado-onprem/Payments/payments-api minimumReviewers.count: 1 -> 2 [baseline] (locked) (update Minimum number of reviewers #17 (ado:policy/17))");
