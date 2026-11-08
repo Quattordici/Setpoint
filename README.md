@@ -4,7 +4,7 @@ Setpoint, repository governance as code for GitHub and Azure DevOps.
 
 Declare pull-request rules once in YAML, in a central policy repo, and Setpoint brings every repository on GitHub, Azure DevOps Services and Azure DevOps Server 2022 in line with them, through `validate`, `plan` and `apply`.
 
-> **Status:** early development. The commands exist but don't do anything yet. Progress is tracked in [the MVP build issue](https://github.com/Quattordici/Setpoint/issues/24).
+> **Status:** early development. `validate` works; `plan` and `apply` don't do anything yet. Progress is tracked in [the MVP build issue](https://github.com/Quattordici/Setpoint/issues/24).
 
 ## Commands
 
@@ -14,6 +14,10 @@ Declare pull-request rules once in YAML, in a central policy repo, and Setpoint 
 | `setpoint plan [--out plan.json] [--json] [--exit-code]` | Reads live state and shows the changes apply would make |
 | `setpoint apply plan.json` | Applies a saved plan, after checking nothing moved since it was made |
 | `setpoint apply --yes` | Re-plans and applies in one step |
+
+## Diagnostics
+
+Every problem has a stable `SPxxxx` code, listed in [docs/diagnostics.md](docs/diagnostics.md). With `--output plain` (the default when output isn't a terminal) each one is a single `file:line:col: severity code: message` line.
 
 ## Editor support
 

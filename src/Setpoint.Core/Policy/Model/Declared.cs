@@ -16,6 +16,16 @@ public enum DeclaredState
     Value,
 }
 
+/// <summary>The non-generic view of <see cref="Declared{T}"/>, for code that walks rules without knowing their types.</summary>
+public interface IDeclared
+{
+    /// <summary>What the layer says about the rule.</summary>
+    DeclaredState State { get; }
+
+    /// <summary>The value when <see cref="State"/> is <see cref="DeclaredState.Value"/>; otherwise null.</summary>
+    object? BoxedValue { get; }
+}
+
 /// <summary>
 /// One rule's value in one layer. YAML has three cases a plain nullable can't tell apart:
 /// the key is absent (<see cref="DeclaredState.NotDeclared"/>), the key is <c>~</c>
@@ -23,7 +33,7 @@ public enum DeclaredState
 /// </summary>
 /// <typeparam name="T">The rule's value type.</typeparam>
 [JsonConverter(typeof(DeclaredJsonConverterFactory))]
-public readonly record struct Declared<T>
+public readonly record struct Declared<T> : IDeclared
 {
     private readonly T? _value;
 
@@ -51,6 +61,9 @@ public readonly record struct Declared<T>
 
     /// <summary>A rule with a value.</summary>
     public static Declared<T> Of(T value) => new(DeclaredState.Value, value);
+
+    /// <inheritdoc />
+    object? IDeclared.BoxedValue => HasValue ? _value : null;
 
     /// <inheritdoc />
     public override string ToString() => State switch

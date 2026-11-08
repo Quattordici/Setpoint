@@ -9,7 +9,7 @@ namespace Setpoint.Core.Policy.Model;
 /// </summary>
 /// <param name="Enabled">Whether the setting must be present.</param>
 [JsonConverter(typeof(BooleanRuleJsonConverter))]
-public sealed record BooleanRule(bool Enabled)
+public sealed record BooleanRule(bool Enabled) : IToggleableRule
 {
     /// <summary>The YAML keys the object form accepts.</summary>
     public static readonly IReadOnlyList<string> ObjectFormKeys = ["enabled"];
