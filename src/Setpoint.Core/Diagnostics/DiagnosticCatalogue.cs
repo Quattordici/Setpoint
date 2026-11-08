@@ -39,6 +39,7 @@ public static class DiagnosticCatalogue
         new(DiagnosticCodes.TargetUnreachable, DiagnosticSeverity.Error, "Target unreachable"),
         new(DiagnosticCodes.RepoReadFailed, DiagnosticSeverity.Error, "Repo read failed"),
         new(DiagnosticCodes.UnmanagedStricter, DiagnosticSeverity.Warning, "Unmanaged setting is stricter"),
+        new(DiagnosticCodes.NoMergeMethodLeft, DiagnosticSeverity.Error, "No merge method left"),
         new(DiagnosticCodes.AmbiguousMatch, DiagnosticSeverity.Warning, "Ambiguous live match"),
         new(DiagnosticCodes.LiveValueUnknown, DiagnosticSeverity.Warning, "Live value unknown"),
         new(DiagnosticCodes.PrivateRepoOnGitHubFree, DiagnosticSeverity.Warning, "Private repo on GitHub Free skipped"),

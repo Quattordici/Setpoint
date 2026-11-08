@@ -123,7 +123,7 @@ public sealed class Planner
             var listed = new List<ListedRepo>();
             await foreach (ListedRepo repo in adapter.ListReposAsync(target, cancellationToken))
             {
-                if (InScope(target, repo.Repo))
+                if (target.InScope(repo.Repo))
                 {
                     listed.Add(repo);
                 }
@@ -142,23 +142,6 @@ public sealed class Planner
     private static Diagnostic Unreachable(Target target, PlanOptions options, string reason) => options.SkipUnreachable
         ? Diagnostic.Warning(DiagnosticCodes.TargetUnreachable, $"Target '{target.Name}' is unreachable ({reason}); it is left out of the plan because of --skip-unreachable.")
         : Diagnostic.Error(DiagnosticCodes.TargetUnreachable, $"Target '{target.Name}' is unreachable ({reason}). No plan file is written; --skip-unreachable leaves the target out instead.");
-
-    /// <summary>True when the repo is in the target's <c>scope:</c> and not in its <c>exclude:</c>.</summary>
-    internal static bool InScope(Target target, RepoRef repo)
-    {
-        if (!string.Equals(repo.Target, target.Name, StringComparison.Ordinal))
-        {
-            return false;
-        }
-
-        bool Matches(IReadOnlyList<string>? globs) =>
-            (globs ?? []).Select(g => RepoGlob.TryParse(g, 2, out _)).OfType<RepoGlob>().Any(g => g.Matches(repo.Owner, repo.Name));
-
-        bool included = target.Definition.Scope is null
-            ? target.Definition.Platform == Platform.AzureDevOps
-            : Matches(target.Definition.Scope);
-        return included && !Matches(target.Definition.Exclude);
-    }
 
     private static void CheckSelectors(string target, IReadOnlyList<ListedRepo> listed, PolicyMerger merger, List<Diagnostic> diagnostics)
     {

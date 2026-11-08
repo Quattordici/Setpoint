@@ -102,6 +102,9 @@ public static class DiagnosticCodes
     /// <summary>An unmanaged setting is stricter than the policy, so the effective result differs from the declared one.</summary>
     public const string UnmanagedStricter = "SP2101";
 
+    /// <summary>Unmanaged merge settings and the policy together leave no merge method, so pull requests can't complete.</summary>
+    public const string NoMergeMethodLeft = "SP2102";
+
     // 22xx: matching live objects.
 
     /// <summary>More than one live Azure DevOps policy matches a rule, so Setpoint leaves them alone.</summary>
