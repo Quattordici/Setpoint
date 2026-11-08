@@ -20,6 +20,14 @@ _Avoid_: Config repo, governance repo, admin repo
 One declared requirement inside a policy, such as a minimum number of reviewers.
 _Avoid_: Setting, check, policy (for a single item)
 
+**Neutral rule**:
+A rule written once that means the same thing on every platform, such as minimum reviewers.
+_Avoid_: Common rule, generic rule, shared setting
+
+**Provider block**:
+The `github:` or `azuredevops:` part of a layer, holding rules that exist on only one platform.
+_Avoid_: Platform overrides, extensions, native settings
+
 **Locked rule**:
 A baseline rule that groups and repo overrides may not change.
 _Avoid_: Enforced rule, mandatory rule
