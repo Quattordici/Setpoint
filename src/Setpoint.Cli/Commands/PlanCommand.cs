@@ -33,6 +33,7 @@ internal static class PlanCommand
         Option<OutputFormat?> output = CommonOptions.Output();
         Option<bool> skipUnreachable = CommonOptions.SkipUnreachable();
         Option<bool> allowUnsupportedServer = CommonOptions.AllowUnsupportedServer();
+        Option<int> maxChanges = CommonOptions.MaxChanges();
 
         var command = new Command("plan", "Read live state and show the changes apply would make.")
         {
@@ -45,6 +46,7 @@ internal static class PlanCommand
             output,
             skipUnreachable,
             allowUnsupportedServer,
+            maxChanges,
             CommonOptions.Record(),
         };
 
@@ -58,7 +60,7 @@ internal static class PlanCommand
                 result.GetValue(exitCode),
                 result.GetValue(verbose),
                 OutputFormatResolver.Resolve(result.GetValue(output), console.Out),
-                new PlanOptions(result.GetValue(strict), result.GetValue(skipUnreachable), result.GetValue(allowUnsupportedServer))),
+                new PlanOptions(result.GetValue(strict), result.GetValue(skipUnreachable), result.GetValue(allowUnsupportedServer), result.GetValue(maxChanges))),
             cancellationToken));
         return command;
     }
@@ -68,7 +70,6 @@ internal static class PlanCommand
     {
         // With --json, standard output carries only the plan, so everything else goes to standard error.
         bool toError = arguments.Json;
-
         (PolicyLoadResult load, IReadOnlyList<Diagnostic> policyDiagnostics) = PolicyGate.Check(arguments.Policy, arguments.Options.Strict);
         if (load.Repo is null || policyDiagnostics.HasErrors())
         {
@@ -82,18 +83,9 @@ internal static class PlanCommand
         PlanResult result = await planner.PlanAsync(input, arguments.Options, cancellationToken);
 
         IReadOnlyList<Diagnostic> diagnostics = [.. policyDiagnostics, .. result.Diagnostics];
-        DiagnosticRenderer.Write(console, diagnostics, arguments.Format, toError);
-
-        if (arguments.Json)
-        {
-            console.OutWriter.Write(PlanFile.Serialize(result.Document));
-        }
-        else
-        {
-            PlanSummaryRenderer.Write(console, result.Document, arguments.Verbose);
-        }
-
         bool hasErrors = diagnostics.HasErrors();
+
+        string? savedTo = null;
         if (arguments.Out is { } file)
         {
             if (hasErrors)
@@ -104,8 +96,24 @@ internal static class PlanCommand
             {
                 file.Directory?.Create();
                 await File.WriteAllTextAsync(file.FullName, PlanFile.Serialize(result.Document), cancellationToken);
-                (toError ? console.ErrorWriter : console.OutWriter).WriteLine($"Saved the plan to {file.FullName}. Apply it with 'setpoint apply {file.Name}'.");
+                savedTo = file.FullName;
             }
+        }
+
+        if (arguments.Json)
+        {
+            DiagnosticRenderer.Write(console, diagnostics, arguments.Format, toError: true);
+            console.OutWriter.Write(PlanFile.Serialize(result.Document));
+            if (savedTo is not null)
+            {
+                console.ErrorWriter.WriteLine($"Saved the plan to {savedTo}.");
+            }
+        }
+        else
+        {
+            // Repo diagnostics show inline in the plan; the rest come first, as validate prints them.
+            DiagnosticRenderer.Write(console, [.. policyDiagnostics, .. result.RunDiagnostics], arguments.Format);
+            PlanRenderer.Write(console, result.Document, arguments.Format, arguments.Verbose, savedTo);
         }
 
         return hasErrors ? ErrorExitCode(diagnostics)

@@ -73,7 +73,8 @@ public sealed record PlanPolicy(
 /// <param name="Strict">Whether warnings were errors.</param>
 /// <param name="SkipUnreachable">Whether unreachable targets were left out.</param>
 /// <param name="AllowUnsupportedServer">Whether servers older than the minimum were accepted.</param>
-public sealed record PlanOptionsRecord(bool Strict, bool SkipUnreachable, bool AllowUnsupportedServer);
+/// <param name="MaxChanges">The most repos apply may change; 0 means no limit.</param>
+public sealed record PlanOptionsRecord(bool Strict, bool SkipUnreachable, bool AllowUnsupportedServer, int MaxChanges);
 
 /// <summary>A target the plan reached.</summary>
 /// <param name="Name">The target name.</param>
@@ -143,12 +144,14 @@ public enum PlanRepoStatus
 /// <param name="Fingerprint">SHA-256 over the normalised live object at plan time; for a create, over "nothing matches" its match key.</param>
 /// <param name="MatchKey">What the object is matched on, so apply can check that nothing appeared before a create.</param>
 /// <param name="Payload">The full payload apply sends as-is; absent for a delete.</param>
+/// <param name="Title">What the object is, for people, such as <c>Minimum number of reviewers #17</c>.</param>
 public sealed record PlanObject(
     string Key,
     ObjectOperation Operation,
     string Fingerprint,
     string MatchKey,
-    [property: JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] JsonNode? Payload = null);
+    [property: JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] JsonNode? Payload = null,
+    [property: JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] string? Title = null);
 
 /// <summary>What apply does to a native object.</summary>
 [JsonConverter(typeof(JsonStringEnumConverter<ObjectOperation>))]

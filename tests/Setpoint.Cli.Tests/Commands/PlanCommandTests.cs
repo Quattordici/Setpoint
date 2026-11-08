@@ -71,7 +71,7 @@ public sealed class PlanCommandTests : IDisposable
 
         // Assert
         run.ExitCode.ShouldBe(ExitCode.Success);
-        run.Out.ShouldContain("Saved the plan to");
+        run.Out.ShouldContain($"plan saved to {file}");
         PlanDocument plan = PlanFile.Deserialize(await File.ReadAllTextAsync(file, TestContext.Current.CancellationToken));
         PlanRepo ledger = plan.Repos.Single(r => r.Path == "Payments/legacy-ledger");
         ledger.Layers.ShouldBe(["baseline", "payments", "repo"]);
@@ -160,8 +160,10 @@ public sealed class PlanCommandTests : IDisposable
         CliRun run = await CliRun.InvokeAsync(Services, "plan", "-p", s_policy, "-o", "plain");
 
         // Assert
-        run.Out.ShouldContain("github/quattordici/payments-gateway: add minimumReviewers: (none) -> count 2, resetOnPush [baseline] (locked)");
-        run.Out.ShouldContain("Plan: 2 repos to change");
+        run.Out.ShouldContain("+ github/quattordici/payments-gateway minimumReviewers: (none) -> count 2, resetOnPush [baseline] (locked) (create Fake minimumReviewers (fake:new/minimumReviewers))");
+        run.Out.ShouldContain("summary repos_changed=2 ");
+        run.Out.ShouldContain("max_changes=2/25");
+        run.Out.ShouldNotContain("\u001b");
     }
 
     // A copy of the test policy whose only targets are a GitHub one without repos and an ADO one, with the payments

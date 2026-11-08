@@ -12,7 +12,12 @@ namespace Setpoint.Core.Planning;
 /// <param name="Strict">Every warning becomes an error.</param>
 /// <param name="SkipUnreachable">An unreachable target is left out with a warning instead of failing the run.</param>
 /// <param name="AllowUnsupportedServer">Servers older than the minimum are accepted; the adapter reads it.</param>
-public sealed record PlanOptions(bool Strict = false, bool SkipUnreachable = false, bool AllowUnsupportedServer = false);
+/// <param name="MaxChanges">The most repos apply may change (default 25); 0 means no limit. Plan shows how much of it is used.</param>
+public sealed record PlanOptions(bool Strict = false, bool SkipUnreachable = false, bool AllowUnsupportedServer = false, int MaxChanges = PlanOptions.DefaultMaxChanges)
+{
+    /// <summary>The default <c>--max-changes</c>.</summary>
+    public const int DefaultMaxChanges = 25;
+}
 
 /// <summary>The policy a plan is made from, with what the plan file records about it.</summary>
 /// <param name="Repo">The loaded policy repo, which has passed validation.</param>
@@ -23,7 +28,8 @@ public sealed record PlanInput(PolicyRepo Repo, IReadOnlyList<PolicySourceFile> 
 /// <summary>A finished plan run.</summary>
 /// <param name="Document">The plan, ready to save or print.</param>
 /// <param name="Diagnostics">Every diagnostic, for the run and each repo, after <c>--strict</c>.</param>
-public sealed record PlanResult(PlanDocument Document, IReadOnlyList<Diagnostic> Diagnostics)
+/// <param name="RunDiagnostics">The ones that belong to the run rather than one repo, such as an unreachable target.</param>
+public sealed record PlanResult(PlanDocument Document, IReadOnlyList<Diagnostic> Diagnostics, IReadOnlyList<Diagnostic> RunDiagnostics)
 {
     /// <summary>True when any diagnostic is an error. Such a plan is not saved.</summary>
     public bool HasErrors => Diagnostics.HasErrors();
@@ -93,14 +99,14 @@ public sealed class Planner
             SetpointVersion = SetpointVersion.Current,
             CreatedAt = _time.GetUtcNow(),
             Policy = new PlanPolicy(PolicyHash.Compute(input.Sources), input.Sources.Count, input.Commit),
-            Options = new PlanOptionsRecord(options.Strict, options.SkipUnreachable, options.AllowUnsupportedServer),
+            Options = new PlanOptionsRecord(options.Strict, options.SkipUnreachable, options.AllowUnsupportedServer, options.MaxChanges),
             Targets = targets,
             Repos = repos,
             Diagnostics = [.. run1.Select(PlanDiagnostic.From)],
             Summary = Summarise(repos, all),
         };
 
-        return new PlanResult(document, all);
+        return new PlanResult(document, all, run1);
     }
 
     private async Task<TargetRun?> ReachAsync(Target target, PlanOptions options, List<Diagnostic> diagnostics, CancellationToken cancellationToken)

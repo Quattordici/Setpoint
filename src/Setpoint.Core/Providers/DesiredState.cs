@@ -28,4 +28,5 @@ public sealed record DesiredRule(string Key, JsonNode? Value, LayerRef Layer, bo
 /// <param name="CreateKey">The object's plan key if it has to be created, such as <c>ado:new/build/payments-ci</c>.</param>
 /// <param name="Rules">The rule values it would carry; a null value means the rule is removed from it.</param>
 /// <param name="Payload">The full payload apply sends, or null when the object must not exist.</param>
-public sealed record DesiredObject(string MatchKey, string CreateKey, IReadOnlyDictionary<string, JsonNode?> Rules, JsonNode? Payload);
+/// <param name="Title">What the object is, for people, when it has to be created: <c>Build validation (new)</c>.</param>
+public sealed record DesiredObject(string MatchKey, string CreateKey, IReadOnlyDictionary<string, JsonNode?> Rules, JsonNode? Payload, string? Title = null);

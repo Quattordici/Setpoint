@@ -67,7 +67,8 @@ internal sealed class FakeProviderAdapter(Platform platform = Platform.GitHub, I
                 $"fake:policy/{o.Id}",
                 $"fake:{o.Rule}",
                 new JsonObject { ["id"] = o.Id, ["rule"] = o.Rule, ["value"] = o.Value?.DeepClone(), ["revision"] = o.Revision },
-                new Dictionary<string, JsonNode?> { [o.Rule] = o.Value?.DeepClone() })),
+                new Dictionary<string, JsonNode?> { [o.Rule] = o.Value?.DeepClone() },
+                $"Fake {o.Rule} #{o.Id}")),
         ];
         return Task.FromResult(new LiveSnapshot(objects, fake.Unmanaged, fake.Ambiguous, fake.Unknown));
     }
@@ -78,7 +79,8 @@ internal sealed class FakeProviderAdapter(Platform platform = Platform.GitHub, I
             $"fake:{rule.Key}",
             $"fake:new/{rule.Key}",
             new Dictionary<string, JsonNode?> { [rule.Key] = rule.Value?.DeepClone() },
-            rule.Value is null ? null : new JsonObject { ["rule"] = rule.Key, ["value"] = rule.Value.DeepClone() })),
+            rule.Value is null ? null : new JsonObject { ["rule"] = rule.Key, ["value"] = rule.Value.DeepClone() },
+            $"Fake {rule.Key}")),
     ];
 
     public Task<ApplyResult> ApplyAsync(RepoRef repo, RepoChangeSet changes, CancellationToken cancellationToken)
