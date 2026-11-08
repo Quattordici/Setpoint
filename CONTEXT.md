@@ -49,3 +49,11 @@ _Avoid_: Repo config, local policy
 **Live state**:
 What a platform currently has configured for a repository.
 _Avoid_: Actual state, current config, reality
+
+**Managed setting**:
+A piece of live state that some rule in the effective policy declares, either as present or as `enabled: false` (absent).
+_Avoid_: Owned setting, tracked setting
+
+**Unmanaged setting**:
+A piece of live state that no rule declares; Setpoint reports it but never changes it.
+_Avoid_: Foreign setting, extra setting, drift (drift is a difference on a managed setting)
