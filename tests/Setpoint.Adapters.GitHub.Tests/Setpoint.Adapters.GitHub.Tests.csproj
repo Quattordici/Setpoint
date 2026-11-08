@@ -1,0 +1,5 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <ItemGroup>
+    <ProjectReference Include="..\..\src\Setpoint.Adapters.GitHub\Setpoint.Adapters.GitHub.csproj" />
+  </ItemGroup>
+</Project>
