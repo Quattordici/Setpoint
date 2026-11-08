@@ -7,7 +7,8 @@ internal static class ConsoleFactory
 {
     /// <summary>
     /// The width used when the output is not a terminal, such as a pipeline log. Spectre reports
-    /// no width there, and renders nothing at all unless it is given one.
+    /// no width there (and renders nothing at all), or a guess from the environment such as 80 on
+    /// a CI runner, so redirected output always gets this width instead.
     /// </summary>
     public const int RedirectedWidth = 120;
 
@@ -18,7 +19,7 @@ internal static class ConsoleFactory
             Out = new AnsiConsoleOutput(writer),
         });
 
-        if (console.Profile.Width <= 0)
+        if (!console.Profile.Out.IsTerminal || console.Profile.Width <= 0)
         {
             console.Profile.Width = RedirectedWidth;
         }
