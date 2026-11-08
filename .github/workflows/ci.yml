@@ -46,7 +46,7 @@ jobs:
         run: dotnet build Setpoint.slnx --no-restore --configuration Release
 
       - name: Test
-        run: dotnet test --solution Setpoint.slnx --no-build --configuration Release --report-trx --results-directory artifacts/test-results
+        run: dotnet test --solution Setpoint.slnx --no-build --configuration Release --report-xunit-trx --results-directory artifacts/test-results
 
       - name: Pack the tool
         run: dotnet pack src/Setpoint.Cli --no-build --configuration Release --output artifacts/packages
