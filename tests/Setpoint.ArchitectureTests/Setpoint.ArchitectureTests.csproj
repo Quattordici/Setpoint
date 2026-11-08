@@ -1,0 +1,12 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <ItemGroup>
+    <PackageReference Include="TngTech.ArchUnitNET" />
+    <PackageReference Include="TngTech.ArchUnitNET.xUnitV3" />
+  </ItemGroup>
+  <ItemGroup>
+    <ProjectReference Include="..\..\src\Setpoint.Cli\Setpoint.Cli.csproj" />
+    <ProjectReference Include="..\..\src\Setpoint.Core\Setpoint.Core.csproj" />
+    <ProjectReference Include="..\..\src\Setpoint.Adapters.GitHub\Setpoint.Adapters.GitHub.csproj" />
+    <ProjectReference Include="..\..\src\Setpoint.Adapters.AzureDevOps\Setpoint.Adapters.AzureDevOps.csproj" />
+  </ItemGroup>
+</Project>

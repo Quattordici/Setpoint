@@ -1,0 +1,8 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <ItemGroup>
+    <PackageReference Include="Spectre.Console.Testing" />
+  </ItemGroup>
+  <ItemGroup>
+    <ProjectReference Include="..\..\src\Setpoint.Cli\Setpoint.Cli.csproj" />
+  </ItemGroup>
+</Project>

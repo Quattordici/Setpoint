@@ -1,0 +1,5 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <Description>The platform-neutral core of Setpoint: policy model, layer merge, diff, plan and fingerprints.</Description>
+  </PropertyGroup>
+</Project>

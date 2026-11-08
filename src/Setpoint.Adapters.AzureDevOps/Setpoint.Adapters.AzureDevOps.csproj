@@ -1,0 +1,8 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <Description>Translates between the Setpoint neutral model and the Azure DevOps API.</Description>
+  </PropertyGroup>
+  <ItemGroup>
+    <ProjectReference Include="..\Setpoint.Core\Setpoint.Core.csproj" />
+  </ItemGroup>
+</Project>

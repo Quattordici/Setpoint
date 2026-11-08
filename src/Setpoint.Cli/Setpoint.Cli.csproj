@@ -1,0 +1,32 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <OutputType>Exe</OutputType>
+    <RootNamespace>Setpoint.Cli</RootNamespace>
+    <!-- The executable name is what help prints in its usage lines. -->
+    <AssemblyName>setpoint</AssemblyName>
+
+    <IsPackable>true</IsPackable>
+    <PackAsTool>true</PackAsTool>
+    <ToolCommandName>setpoint</ToolCommandName>
+    <PackageId>Setpoint</PackageId>
+    <Title>Setpoint</Title>
+    <Description>Setpoint, repository governance as code for GitHub and Azure DevOps. Declare pull-request rules once in YAML, then validate, plan and apply them across your repositories.</Description>
+    <PackageTags>governance;policy-as-code;github;azure-devops;branch-policy;rulesets;dotnet-tool</PackageTags>
+    <PackageReadmeFile>README.md</PackageReadmeFile>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <PackageReference Include="Spectre.Console" />
+    <PackageReference Include="System.CommandLine" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\Setpoint.Core\Setpoint.Core.csproj" />
+    <ProjectReference Include="..\Setpoint.Adapters.GitHub\Setpoint.Adapters.GitHub.csproj" />
+    <ProjectReference Include="..\Setpoint.Adapters.AzureDevOps\Setpoint.Adapters.AzureDevOps.csproj" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <None Include="..\..\README.md" Pack="true" PackagePath="\" />
+  </ItemGroup>
+</Project>
