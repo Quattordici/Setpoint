@@ -33,8 +33,14 @@ public static class DiagnosticCatalogue
         new(DiagnosticCodes.OutsideScope, DiagnosticSeverity.Warning, "Repo outside target scope"),
         new(DiagnosticCodes.SelectorMatchesNothing, DiagnosticSeverity.Warning, "Selector matches nothing"),
         new(DiagnosticCodes.RepoNotFound, DiagnosticSeverity.Error, "Repo not found"),
+        new(DiagnosticCodes.ArchivedRepoSkipped, DiagnosticSeverity.Info, "Archived repo skipped"),
+        new(DiagnosticCodes.EmptyRepoSkipped, DiagnosticSeverity.Warning, "Empty repo skipped"),
+        new(DiagnosticCodes.ForkSkipped, DiagnosticSeverity.Info, "Fork skipped"),
+        new(DiagnosticCodes.TargetUnreachable, DiagnosticSeverity.Error, "Target unreachable"),
+        new(DiagnosticCodes.RepoReadFailed, DiagnosticSeverity.Error, "Repo read failed"),
         new(DiagnosticCodes.UnmanagedStricter, DiagnosticSeverity.Warning, "Unmanaged setting is stricter"),
         new(DiagnosticCodes.AmbiguousMatch, DiagnosticSeverity.Warning, "Ambiguous live match"),
+        new(DiagnosticCodes.LiveValueUnknown, DiagnosticSeverity.Warning, "Live value unknown"),
         new(DiagnosticCodes.PrivateRepoOnGitHubFree, DiagnosticSeverity.Warning, "Private repo on GitHub Free skipped"),
     ];
 

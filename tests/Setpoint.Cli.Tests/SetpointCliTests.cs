@@ -166,8 +166,8 @@ public sealed class SetpointCliTests
         // Act
         CliRun run = await CliRun.InvokeAsync(args);
 
-        // Assert
-        run.ExitCode.ShouldNotBe(ExitCode.InvalidPolicyOrUsage);
+        // Assert: plan now runs and fails on the missing policy, so check that parsing reported nothing.
+        run.Error.ShouldNotContain("for usage.");
     }
 
     /// <summary>
@@ -188,6 +188,6 @@ public sealed class SetpointCliTests
 
         // Assert
         helpRun.Out.ShouldNotContain("--record");
-        recordRun.ExitCode.ShouldNotBe(ExitCode.InvalidPolicyOrUsage);
+        recordRun.Error.ShouldNotContain("for usage.");
     }
 }

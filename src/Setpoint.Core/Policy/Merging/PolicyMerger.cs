@@ -16,6 +16,7 @@ public sealed class PolicyMerger
     private readonly HashSet<string> _locked;
     private readonly IReadOnlyList<(PolicyFile<PolicyLayer> File, IReadOnlyList<RepoGlob> Selectors, IReadOnlyList<RuleDeclaration> Rules)> _groups;
     private readonly Dictionary<RepoRef, IReadOnlyList<RuleDeclaration>> _overrides;
+    private readonly List<(PolicyFile<PolicyLayer> File, RepoRef Repo)> _overrideFiles;
 
     public PolicyMerger(PolicyRepo policy, IReadOnlyList<IProviderBlockDefinition> providers)
     {
@@ -29,17 +30,26 @@ public sealed class PolicyMerger
                 (IReadOnlyList<RuleDeclaration>)[.. RuleDeclaration.From(g, providers)])),
         ];
         _overrides = [];
+        _overrideFiles = [];
         foreach (PolicyFile<PolicyLayer> file in policy.RepoOverrides)
         {
             if (file.Content.Repo is { } name && RepoRef.TryParse(name) is { } repo)
             {
                 _overrides[repo] = [.. RuleDeclaration.From(file, providers)];
+                _overrideFiles.Add((file, repo));
             }
         }
     }
 
     /// <summary>The repos named by repo overrides, which can be merged without live access.</summary>
     public IEnumerable<RepoRef> RepoOverrideRepos => _overrides.Keys;
+
+    /// <summary>The group files with their parsed selectors, for checking selectors against live repos.</summary>
+    public IEnumerable<(PolicyFile<PolicyLayer> File, IReadOnlyList<RepoGlob> Selectors)> GroupSelectors =>
+        _groups.Select(g => (g.File, g.Selectors));
+
+    /// <summary>The repo override files with the repo each names.</summary>
+    public IEnumerable<(PolicyFile<PolicyLayer> File, RepoRef Repo)> RepoOverrideFiles => _overrideFiles;
 
     /// <summary>The repos named by exact (wildcard-free) group selectors.</summary>
     public IEnumerable<RepoRef> ExactlySelectedRepos =>
@@ -71,15 +81,16 @@ public sealed class PolicyMerger
             Apply(effective, first);
         }
 
-        if (_overrides.TryGetValue(repo, out IReadOnlyList<RuleDeclaration>? overrides))
+        bool hasOverride = _overrides.TryGetValue(repo, out IReadOnlyList<RuleDeclaration>? overrides);
+        if (hasOverride)
         {
-            foreach (RuleDeclaration declaration in overrides)
+            foreach (RuleDeclaration declaration in overrides!)
             {
                 Apply(effective, declaration);
             }
         }
 
-        return new EffectivePolicy(repo, effective, [.. matchingGroups.Select(g => g.File.Content.Name!)]);
+        return new EffectivePolicy(repo, effective, [.. matchingGroups.Select(g => g.File.Content.Name!)], hasOverride);
     }
 
     private void Apply(Dictionary<string, EffectiveRule> effective, RuleDeclaration declaration)
@@ -92,5 +103,5 @@ public sealed class PolicyMerger
     }
 
     private EffectiveRule ToEffective(RuleDeclaration declaration) =>
-        new(declaration.Key, declaration.State, declaration.Value, declaration.Layer, _locked.Contains(declaration.Key));
+        new(declaration.Key, declaration.State, declaration.Value, declaration.Layer, _locked.Contains(declaration.Key), declaration.Canonical);
 }

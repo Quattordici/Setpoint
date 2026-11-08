@@ -1,3 +1,4 @@
+using System.Text.Json.Nodes;
 using Setpoint.Core.Policy.Model;
 
 namespace Setpoint.Core.Policy.Merging;
@@ -8,7 +9,8 @@ namespace Setpoint.Core.Policy.Merging;
 /// <param name="Value">The value, or null when unmanaged.</param>
 /// <param name="Source">The layer the value came from.</param>
 /// <param name="Locked">True when the baseline locks this rule.</param>
-public sealed record EffectiveRule(string Key, DeclaredState State, object? Value, LayerRef Source, bool Locked)
+/// <param name="Canonical">The value as JSON, as the layer declared it; null when unmanaged.</param>
+public sealed record EffectiveRule(string Key, DeclaredState State, object? Value, LayerRef Source, bool Locked, JsonNode? Canonical = null)
 {
     /// <summary>True when the rule says the setting must be absent: <c>false</c> or <c>enabled: false</c>.</summary>
     public bool MustBeAbsent => Value is IToggleableRule { Enabled: false };
@@ -21,8 +23,12 @@ public sealed record EffectiveRule(string Key, DeclaredState State, object? Valu
 /// <param name="Repo">The repo.</param>
 /// <param name="Rules">The declared rules, keyed by rule key. Rules no layer mentions are not here.</param>
 /// <param name="Groups">The groups whose selectors matched, in file order.</param>
-public sealed record EffectivePolicy(RepoRef Repo, IReadOnlyDictionary<string, EffectiveRule> Rules, IReadOnlyList<string> Groups)
+/// <param name="HasRepoOverride">True when the repo has a repo override file.</param>
+public sealed record EffectivePolicy(RepoRef Repo, IReadOnlyDictionary<string, EffectiveRule> Rules, IReadOnlyList<string> Groups, bool HasRepoOverride = false)
 {
+    /// <summary>The layers that apply to the repo, as plan output labels them: <c>baseline</c>, group names, <c>repo</c>.</summary>
+    public IReadOnlyList<string> Layers => ["baseline", .. Groups, .. HasRepoOverride ? new[] { "repo" } : []];
+
     /// <summary>The effective value of a rule, or null when it is not declared or is unmanaged.</summary>
     public T? Get<T>(string key)
         where T : class =>

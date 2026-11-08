@@ -6,7 +6,7 @@ namespace Setpoint.Core.Diagnostics;
 /// </summary>
 /// <remarks>
 /// Ranges: 01xx policy files (found offline by <c>validate</c>), 02xx selection (scope and selectors against
-/// live repos), 21xx ownership of managed settings, 22xx matching live objects, 30xx platform capabilities.
+/// live repos), 10xx reaching targets and reading repos, 21xx ownership of managed settings, 22xx matching live objects, 30xx platform capabilities.
 /// </remarks>
 public static class DiagnosticCodes
 {
@@ -80,6 +80,23 @@ public static class DiagnosticCodes
     /// <summary>An exact selector or repo override names a repo that doesn't exist.</summary>
     public const string RepoNotFound = "SP0202";
 
+    /// <summary>An archived or disabled repo in scope. It is skipped.</summary>
+    public const string ArchivedRepoSkipped = "SP0203";
+
+    /// <summary>An empty repo in scope, which has no default branch to protect. It is skipped.</summary>
+    public const string EmptyRepoSkipped = "SP0204";
+
+    /// <summary>A GitHub fork in scope on a target without <c>includeForks: true</c>. It is skipped.</summary>
+    public const string ForkSkipped = "SP0205";
+
+    // 10xx: reaching targets and reading repos.
+
+    /// <summary>A target can't be reached or refused the preflight, so none of its repos are planned.</summary>
+    public const string TargetUnreachable = "SP1001";
+
+    /// <summary>Reading one repo's live state failed. The other repos are still planned.</summary>
+    public const string RepoReadFailed = "SP1002";
+
     // 21xx: ownership.
 
     /// <summary>An unmanaged setting is stricter than the policy, so the effective result differs from the declared one.</summary>
@@ -89,6 +106,9 @@ public static class DiagnosticCodes
 
     /// <summary>More than one live Azure DevOps policy matches a rule, so Setpoint leaves them alone.</summary>
     public const string AmbiguousMatch = "SP2201";
+
+    /// <summary>The token can't see a live setting, so plan reports it as unknown instead of as a change.</summary>
+    public const string LiveValueUnknown = "SP2202";
 
     // 30xx: platform capabilities.
 

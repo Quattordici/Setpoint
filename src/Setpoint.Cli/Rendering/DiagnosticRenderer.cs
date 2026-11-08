@@ -9,14 +9,17 @@ namespace Setpoint.Cli.Rendering;
 /// </summary>
 internal static class DiagnosticRenderer
 {
-    public static void Write(CliConsole console, IEnumerable<Diagnostic> diagnostics, OutputFormat format)
+    /// <summary>Writes the diagnostics to standard output, or to standard error when <paramref name="toError"/> is set.</summary>
+    public static void Write(CliConsole console, IEnumerable<Diagnostic> diagnostics, OutputFormat format, bool toError = false)
     {
+        TextWriter writer = toError ? console.ErrorWriter : console.OutWriter;
+        IAnsiConsole rich = toError ? console.Error : console.Out;
         foreach (Diagnostic diagnostic in diagnostics)
         {
             if (format == OutputFormat.Plain)
             {
                 // Straight to the writer: plain lines never wrap, so log parsers see one line per diagnostic.
-                console.OutWriter.WriteLine(Plain(diagnostic));
+                writer.WriteLine(Plain(diagnostic));
                 continue;
             }
 
@@ -28,8 +31,8 @@ internal static class DiagnosticRenderer
             };
             string severity = diagnostic.Severity.ToString().ToLowerInvariant();
             string location = diagnostic.Location is null ? string.Empty : $" [dim]{Markup.Escape(diagnostic.Location.ToString())}[/]";
-            console.Out.MarkupLine($"[{colour} bold]{severity}[/] [bold]{diagnostic.Code}[/]{location}");
-            console.Out.MarkupLine($"  {Markup.Escape(diagnostic.Message)}");
+            rich.MarkupLine($"[{colour} bold]{severity}[/] [bold]{diagnostic.Code}[/]{location}");
+            rich.MarkupLine($"  {Markup.Escape(diagnostic.Message)}");
         }
     }
 

@@ -43,7 +43,7 @@ public sealed partial class DiagnosticCatalogueTests
     public void Codes_Format_FollowRanges()
     {
         // Arrange
-        string[] ranges = ["01", "02", "21", "22", "30"];
+        string[] ranges = ["01", "02", "10", "21", "22", "30"];
 
         // Act
         string[] wrong = [.. s_codes.Where(c => !CodePattern().IsMatch(c) || !ranges.Contains(c[2..4]))];
