@@ -39,12 +39,15 @@ public static class DiagnosticCatalogue
         new(DiagnosticCodes.PipelineNotFound, DiagnosticSeverity.Error, "Pipeline not found"),
         new(DiagnosticCodes.TargetUnreachable, DiagnosticSeverity.Error, "Target unreachable"),
         new(DiagnosticCodes.RepoReadFailed, DiagnosticSeverity.Error, "Repo read failed"),
+        new(DiagnosticCodes.WriteFailed, DiagnosticSeverity.Error, "Write failed"),
         new(DiagnosticCodes.UnmanagedStricter, DiagnosticSeverity.Warning, "Unmanaged setting is stricter"),
         new(DiagnosticCodes.NoMergeMethodLeft, DiagnosticSeverity.Error, "No merge method left"),
         new(DiagnosticCodes.ForcePushAllowed, DiagnosticSeverity.Warning, "Force push explicitly allowed"),
         new(DiagnosticCodes.AmbiguousMatch, DiagnosticSeverity.Warning, "Ambiguous live match"),
         new(DiagnosticCodes.LiveValueUnknown, DiagnosticSeverity.Warning, "Live value unknown"),
         new(DiagnosticCodes.PrivateRepoOnGitHubFree, DiagnosticSeverity.Warning, "Private repo on GitHub Free skipped"),
+        new(DiagnosticCodes.StalePlan, DiagnosticSeverity.Error, "Plan is stale"),
+        new(DiagnosticCodes.TooManyChanges, DiagnosticSeverity.Error, "Too many changes"),
     ];
 
     /// <summary>The entry for <paramref name="code"/>.</summary>

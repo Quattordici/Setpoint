@@ -100,6 +100,9 @@ public static class DiagnosticCodes
     /// <summary>Reading one repo's live state failed. The other repos are still planned.</summary>
     public const string RepoReadFailed = "SP1002";
 
+    /// <summary>Writing one repo's changes failed. That repo stops; the others carry on unless <c>--fail-fast</c>.</summary>
+    public const string WriteFailed = "SP1003";
+
     // 21xx: ownership.
 
     /// <summary>An unmanaged setting is stricter than the policy, so the effective result differs from the declared one.</summary>
@@ -123,4 +126,12 @@ public static class DiagnosticCodes
 
     /// <summary>A private repo on GitHub Free, where rulesets don't apply. It is skipped.</summary>
     public const string PrivateRepoOnGitHubFree = "SP3001";
+
+    // 40xx: apply guards.
+
+    /// <summary>The plan no longer matches live state, the policy or the Setpoint version, so apply writes nothing (exit 3).</summary>
+    public const string StalePlan = "SP4001";
+
+    /// <summary>More repos would change than <c>--max-changes</c> allows, so apply writes nothing (exit 4).</summary>
+    public const string TooManyChanges = "SP4002";
 }
