@@ -107,19 +107,19 @@ public sealed class GitHubAdapterTests : IAsyncLifetime
     }
 
     /// <summary>
-    /// Given a target with auth: app, which a later build adds,
+    /// Given a GitHub target with an auth method only Azure DevOps has,
     /// when it is described,
-    /// then it fails saying the method isn't available yet.
+    /// then it fails naming the methods GitHub supports.
     /// </summary>
-    [Fact(DisplayName = "👎 Refuses auth methods this build doesn't have yet")]
-    public async Task Describe_AppAuth_IsNotSupportedYet()
+    [Fact(DisplayName = "👎 Refuses auth methods GitHub doesn't have")]
+    public async Task Describe_AccessTokenAuth_IsNotSupported()
     {
         // Act
         var exception = await Should.ThrowAsync<NotSupportedException>(() =>
-            _sut.DescribeAsync(Target(d => d with { Auth = AuthMethod.App, AppId = 1 }), TestContext.Current.CancellationToken));
+            _sut.DescribeAsync(Target(d => d with { Auth = AuthMethod.AccessToken }), TestContext.Current.CancellationToken));
 
         // Assert
-        exception.Message.ShouldContain("auth: app");
+        exception.Message.ShouldContain("use pat or app");
     }
 
     /// <summary>
