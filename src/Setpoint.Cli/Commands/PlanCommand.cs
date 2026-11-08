@@ -82,7 +82,9 @@ internal static class PlanCommand
             return ExitCode.InvalidPolicyOrUsage;
         }
 
-        IReadOnlyList<IProviderAdapter> adapters = services.CreateAdapters(new AdapterSettings(new HttpCoreOptions { RecordDirectory = arguments.Record?.FullName }));
+        IReadOnlyList<IProviderAdapter> adapters = services.CreateAdapters(new AdapterSettings(
+            new HttpCoreOptions { RecordDirectory = arguments.Record?.FullName },
+            arguments.Options.AllowUnsupportedServer));
         PlanResult result;
         try
         {
