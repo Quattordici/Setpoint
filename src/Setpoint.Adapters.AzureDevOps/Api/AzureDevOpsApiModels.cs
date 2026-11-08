@@ -34,11 +34,20 @@ internal sealed record AdoRepository
     public bool IsInMaintenance { get; init; }
 }
 
+/// <summary>A pipeline (build definition), from <c>GET {project}/_apis/build/definitions</c>.</summary>
+internal sealed record AdoBuildDefinition(int Id, string Name, string? Path);
+
+/// <summary>An identity, from <c>GET _apis/identities</c>. The descriptor is the one ACLs are keyed on.</summary>
+internal sealed record AdoIdentity(string? Descriptor, string? ProviderDisplayName, string? CustomDisplayName);
+
 /// <summary>The Azure DevOps REST API's JSON contract: camelCase, and every field Setpoint doesn't read is ignored.</summary>
 [JsonSourceGenerationOptions(PropertyNamingPolicy = JsonKnownNamingPolicy.CamelCase)]
 [JsonSerializable(typeof(AdoList<AdoResourceLocation>))]
 [JsonSerializable(typeof(AdoList<AdoProject>))]
 [JsonSerializable(typeof(AdoList<AdoPolicyType>))]
 [JsonSerializable(typeof(AdoList<AdoRepository>))]
+[JsonSerializable(typeof(AdoList<AdoBuildDefinition>))]
+[JsonSerializable(typeof(AdoList<AdoIdentity>))]
+[JsonSerializable(typeof(AdoList<JsonObject>))]
 [JsonSerializable(typeof(JsonObject))]
 internal sealed partial class AzureDevOpsApiJsonContext : JsonSerializerContext;

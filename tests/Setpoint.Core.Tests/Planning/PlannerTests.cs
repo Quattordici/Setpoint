@@ -283,6 +283,49 @@ public sealed class PlannerTests
     }
 
     /// <summary>
+    /// Given a live warning about a rule the policy sets, and one about a rule it doesn't,
+    /// when the repo is planned,
+    /// then only the warning about the declared rule is reported.
+    /// </summary>
+    [Fact(DisplayName = "🖐️ Live warnings are reported only for rules the policy sets")]
+    public async Task Plan_RuleWarnings_OnlyForDeclaredRules()
+    {
+        // Arrange
+        _builder.WithBaseline(Baseline("protectFromForcePushAndDelete: true"));
+        FakeProviderAdapter.FakeRepo repo = _adapter.AddRepo(Repo);
+        repo.Warnings.Add(new RuleWarning("protectFromForcePushAndDelete", Diagnostic.Warning(DiagnosticCodes.ForcePushAllowed, "creator allowed")));
+        repo.Warnings.Add(new RuleWarning("requireCommentResolution", Diagnostic.Warning(DiagnosticCodes.ForcePushAllowed, "not declared")));
+
+        // Act
+        PlanResult result = await PlanAsync();
+
+        // Assert
+        result.Diagnostics.ShouldHaveSingleItem().Message.ShouldContain("creator allowed");
+    }
+
+    /// <summary>
+    /// Given an adapter that can't map the policy onto a repo, such as a pipeline that doesn't exist,
+    /// when the repo is planned,
+    /// then the repo fails with the adapter's code and message, not as a failed read.
+    /// </summary>
+    [Fact(DisplayName = "👎 A policy the adapter can't map fails the repo with the adapter's code")]
+    public async Task Plan_MappingFails_ReportsAdapterCode()
+    {
+        // Arrange
+        _builder.WithBaseline(Baseline("requireCommentResolution: true"));
+        _adapter.AddRepo(Repo).MappingFailure = new PolicyMappingException(DiagnosticCodes.PipelineNotFound, "requiredChecks: no pipeline is named 'ci'");
+
+        // Act
+        PlanResult result = await PlanAsync();
+
+        // Assert
+        Single(result).Status.ShouldBe(PlanRepoStatus.Error);
+        Diagnostic error = result.Diagnostics.ShouldHaveSingleItem();
+        error.Code.ShouldBe(DiagnosticCodes.PipelineNotFound);
+        error.Message.ShouldContain("no pipeline is named 'ci'");
+    }
+
+    /// <summary>
     /// Given a rule whose live value the token can't see,
     /// when the repo is planned,
     /// then it is reported as unknown (SP2202) rather than as a change.

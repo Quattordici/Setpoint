@@ -92,12 +92,78 @@ internal sealed class AzureDevOpsApiStub(WireMockServer server, string token)
         return this;
     }
 
+    /// <summary>A project's policy configurations, in two pages linked by x-ms-continuationtoken.</summary>
+    public AzureDevOpsApiStub PolicyConfigurations(string projectId, JsonObject[] first, JsonObject[] second)
+    {
+        server.Given(Versioned($"/{projectId}/_apis/policy/configurations").WithParam("continuationToken", "page-2"))
+            .AtPriority(1)
+            .RespondWith(Json(List(new JsonArray([.. second.Select(c => (JsonNode)c.DeepClone())]))));
+        server.Given(Versioned($"/{projectId}/_apis/policy/configurations"))
+            .AtPriority(2)
+            .RespondWith(Json(List(new JsonArray([.. first.Select(c => (JsonNode)c.DeepClone())]))).WithHeader("x-ms-continuationtoken", "page-2"));
+        return this;
+    }
+
+    public AzureDevOpsApiStub BuildDefinitions(string projectId, params (int Id, string Name)[] pipelines)
+    {
+        server.Given(Versioned($"/{projectId}/_apis/build/definitions"))
+            .RespondWith(Json(List(new JsonArray([.. pipelines.Select(p => (JsonNode)new JsonObject { ["id"] = p.Id, ["name"] = p.Name, ["path"] = "\\" })]))));
+        return this;
+    }
+
+    /// <summary>The Project Valid Users group of a project, found by a general identity search.</summary>
+    public AzureDevOpsApiStub ValidUsers(string projectName, string descriptor)
+    {
+        server.Given(Versioned("/_apis/identities").WithParam("searchFilter", "General").WithParam("filterValue", $"[{projectName}]\\Project Valid Users"))
+            .RespondWith(Json(List(new JsonArray((JsonNode)Identity(descriptor, $"[{projectName}]\\Project Valid Users")))));
+        return this;
+    }
+
+    /// <summary>The identities a descriptor lookup returns.</summary>
+    public AzureDevOpsApiStub Identities(params (string Descriptor, string Name)[] identities)
+    {
+        server.Given(Versioned("/_apis/identities").WithParam("descriptors"))
+            .RespondWith(Json(List(new JsonArray([.. identities.Select(i => (JsonNode)Identity(i.Descriptor, i.Name))]))));
+        return this;
+    }
+
+    /// <summary>The ACL on a token in the Git Repositories namespace.</summary>
+    public AzureDevOpsApiStub Acl(string token, params (string Descriptor, int Allow, int Deny)[] entries)
+    {
+        var aces = new JsonObject();
+        foreach ((string descriptor, int allow, int deny) in entries)
+        {
+            aces[descriptor] = new JsonObject { ["descriptor"] = descriptor, ["allow"] = allow, ["deny"] = deny };
+        }
+
+        var acl = new JsonObject { ["inheritPermissions"] = true, ["token"] = token, ["acesDictionary"] = aces };
+        server.Given(Versioned("/_apis/accesscontrollists/2e9eb7ed-3c0a-47d4-87c1-0ffdd275fd87").WithParam("token", token))
+            .RespondWith(Json(List(new JsonArray((JsonNode)acl))));
+        return this;
+    }
+
+    /// <summary>What a read-only PAT gets for security reads: 401.</summary>
+    public AzureDevOpsApiStub AclUnauthorized()
+    {
+        server.Given(Request.Create().WithPath(Collection + "/_apis/accesscontrollists/2e9eb7ed-3c0a-47d4-87c1-0ffdd275fd87").UsingGet())
+            .RespondWith(Response.Create().WithStatusCode(401).WithBody("""{"message":"TF400813: The user is not authorized to access this resource."}"""));
+        return this;
+    }
+
     /// <summary>A server that is fully reachable: signed in, released at <paramref name="releasedVersion"/>, one project with every policy type.</summary>
     public AzureDevOpsApiStub Server(string releasedVersion = "7.0")
     {
         string projectId = Guid.NewGuid().ToString();
         return ConnectionData("Setpoint Service", @"CORP\svc-setpoint").PolicyArea(releasedVersion).Projects((projectId, "Payments")).PolicyTypes(projectId);
     }
+
+    private static JsonObject Identity(string descriptor, string name) => new()
+    {
+        ["id"] = Guid.NewGuid().ToString(),
+        ["descriptor"] = descriptor,
+        ["providerDisplayName"] = name,
+        ["isActive"] = true,
+    };
 
     private IRequestBuilder Signed(string path) => Request.Create().WithPath(Collection + path).WithHeader("Authorization", _basic);
 

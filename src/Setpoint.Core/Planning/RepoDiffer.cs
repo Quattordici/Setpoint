@@ -44,6 +44,14 @@ public static class RepoDiffer
                 $"{unknown}: the token can't see the live value, so it is reported as {ValueText.Unknown} and not changed. Grant the token read access to see it."));
         }
 
+        foreach (RuleWarning warning in live.Warnings ?? [])
+        {
+            if (desired.Rules.TryGetValue(warning.Rule, out DesiredRule? declared) && !declared.MustBeAbsent)
+            {
+                diagnostics.Add(warning.Diagnostic);
+            }
+        }
+
         Dictionary<string, LiveObject> liveByMatch = live.Objects
             .GroupBy(o => o.MatchKey, StringComparer.Ordinal)
             .ToDictionary(g => g.Key, g => g.First(), StringComparer.Ordinal);
