@@ -3,6 +3,9 @@
     <Description>Translates between the Setpoint neutral model and the Azure DevOps API.</Description>
   </PropertyGroup>
   <ItemGroup>
+    <PackageReference Include="Azure.Identity" />
+  </ItemGroup>
+  <ItemGroup>
     <ProjectReference Include="..\Setpoint.Core\Setpoint.Core.csproj" />
     <ProjectReference Include="..\Setpoint.Http\Setpoint.Http.csproj" />
   </ItemGroup>

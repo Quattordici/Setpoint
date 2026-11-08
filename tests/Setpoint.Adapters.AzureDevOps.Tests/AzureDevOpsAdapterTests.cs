@@ -257,12 +257,11 @@ public sealed class AzureDevOpsAdapterTests : IAsyncLifetime
     }
 
     /// <summary>
-    /// Given an Azure DevOps target with an auth method this build doesn't have yet,
+    /// Given an Azure DevOps target with GitHub's auth method,
     /// when it is described,
-    /// then it fails naming pat as the one to use.
+    /// then it fails naming the methods Azure DevOps has.
     /// </summary>
-    [Theory(DisplayName = "👎 Refuses auth methods this build doesn't have for Azure DevOps")]
-    [InlineData(AuthMethod.AccessToken)]
+    [Theory(DisplayName = "👎 Refuses auth methods Azure DevOps doesn't have")]
     [InlineData(AuthMethod.App)]
     public async Task Describe_OtherAuth_IsNotSupported(AuthMethod auth)
     {

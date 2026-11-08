@@ -1,6 +1,6 @@
 # Azure DevOps
 
-Setpoint manages Azure DevOps Services organizations and Azure DevOps Server 2022 (and later) collections. This page grows with the adapter. This build plans: it reads branch policies and the default branch's Force push entries and shows the changes. Writing them comes next, so `apply` writes nothing to Azure DevOps yet.
+Setpoint manages Azure DevOps Services organizations and Azure DevOps Server 2022 (and later) collections. This page grows with the adapter. This build plans with every sign-in method: it reads branch policies and the default branch's Force push entries and shows the changes. Writing them comes next, so `apply` writes nothing to Azure DevOps yet.
 
 ## Targets
 
@@ -22,7 +22,16 @@ targets:
 
 ## Signing in
 
-`auth: pat` is the default, and it is the only method in this build. Setpoint reads the token from `SETPOINT_<TARGET>_TOKEN`, so `ado-onprem` reads `SETPOINT_ADO_ONPREM_TOKEN`. `tokenEnv:` names a different variable. The token is sent as Basic auth with an empty user name, and it is masked in every log and recording.
+Secrets only ever come from environment variables, and every token is masked in logs and recordings. The plan header shows who Setpoint signed in as, whatever the method.
+
+| `auth:` | Where | How |
+| --- | --- | --- |
+| `pat` (default) | Services and Server | A personal access token from `SETPOINT_<TARGET>_TOKEN` (`ado-onprem` reads `SETPOINT_ADO_ONPREM_TOKEN`), or the variable `tokenEnv:` names. Sent as Basic auth with an empty user name. |
+| `accessToken` | Services and Server, in Azure Pipelines | The job's token from `SYSTEM_ACCESSTOKEN`, sent as a bearer token. Pipelines don't expose it to scripts by default, so map it in the step: `env: { SYSTEM_ACCESSTOKEN: $(System.AccessToken) }`. The project's build service identity needs the permissions below. |
+| `integrated` | Server only | Windows authentication (Negotiate or NTLM) as the account Setpoint runs as, such as a self-hosted agent's service account. Setpoint reads no secret. |
+| `entra` | Services only | A Microsoft Entra ID token for the Azure DevOps resource, through Azure.Identity. Tried in order: workload identity federation (an Azure Resource Manager service connection with `AzureCLI@2`, or the `AZURE_*` variables it sets), managed identity (`AZURE_CLIENT_ID` picks a user-assigned one), then the Azure CLI's `az login`. Nothing interactive. The token is reused until five minutes before it expires. |
+
+`validate` rejects `entra` on a Server URL and `integrated` on a Services URL (SP0117).
 
 A plan only reads, so a plan-stage token needs only **Code (read)** and **Build (read)** (`vso.code`, `vso.build`). With just those, plan can't read the default branch's security entries, so it reports `protectFromForcePushAndDelete` as unknown (SP2202) instead of as a change. Reading it also needs **Identity (read)** and **Security (manage)** (`vso.identity`, `vso.security_manage`). The latter can change permissions, so give it to the apply token, not the plan token.
 
