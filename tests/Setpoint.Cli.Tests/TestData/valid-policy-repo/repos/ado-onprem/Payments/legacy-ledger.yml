@@ -1,0 +1,11 @@
+# yaml-language-server: $schema=https://raw.githubusercontent.com/Quattordici/Setpoint/main/schema/v1/layer.json
+version: 1
+
+layer: repo
+repo: ado-onprem/Payments/legacy-ledger
+
+rules:
+  allowedMergeTypes: [merge, squash]    # long-lived branches merged in
+  requiredChecks: ~                     # unmanaged: the team's own pipeline gate stays as it is
+  requireCommentResolution: false       # ensure the comment policy is REMOVED
+

@@ -46,7 +46,7 @@ public sealed record NeutralRules
 }
 
 /// <summary>The <c>minimumReviewers</c> rule.</summary>
-public sealed record MinimumReviewersRule
+public sealed record MinimumReviewersRule : IToggleableRule
 {
     /// <summary>False means the setting must be absent; the other fields are then ignored.</summary>
     [Description("false means the setting must be absent.")]

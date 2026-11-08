@@ -1,0 +1,17 @@
+# yaml-language-server: $schema=https://raw.githubusercontent.com/Quattordici/Setpoint/main/schema/v1/layer.json
+version: 1
+
+layer: group
+name: payments
+selectors:
+  - ado-onprem/Payments/*
+  - github/quattordici/payments-*
+
+rules:
+  requiredChecks:
+    - name: payments-ci
+  allowedMergeTypes: [squash]
+
+azuredevops:
+  requiredChecks:
+    validDuration: 720        # minutes; build result expires after 12h

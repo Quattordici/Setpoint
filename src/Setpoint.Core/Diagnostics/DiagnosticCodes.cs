@@ -1,11 +1,17 @@
 namespace Setpoint.Core.Diagnostics;
 
 /// <summary>
-/// The stable diagnostic codes. Codes never change meaning once released.
-/// 01xx are policy file problems that <c>validate</c> finds offline.
+/// The stable diagnostic codes. A code never changes meaning once released; retired codes are not reused.
+/// Every code is listed with its default severity in <see cref="DiagnosticCatalogue"/> and in docs/diagnostics.md.
 /// </summary>
+/// <remarks>
+/// Ranges: 01xx policy files (found offline by <c>validate</c>), 02xx selection (scope and selectors against
+/// live repos), 21xx ownership of managed settings, 22xx matching live objects, 30xx platform capabilities.
+/// </remarks>
 public static class DiagnosticCodes
 {
+    // 01xx: policy files.
+
     /// <summary>The file is not valid YAML, or uses YAML Setpoint does not accept (several documents, complex keys).</summary>
     public const string InvalidYaml = "SP0101";
 
@@ -24,7 +30,7 @@ public static class DiagnosticCodes
     /// <summary>A value of the wrong type or shape, such as a string where a number belongs.</summary>
     public const string InvalidValue = "SP0106";
 
-    /// <summary>A group or repo override changes a rule the baseline locks. Reported by layer merge.</summary>
+    /// <summary>A group or repo override declares a rule the baseline locks.</summary>
     public const string LockedRuleOverridden = "SP0107";
 
     /// <summary>A policy file is missing, misplaced or misnamed, or its contents don't match where it lives.</summary>
@@ -32,4 +38,60 @@ public static class DiagnosticCodes
 
     /// <summary>A key that exists in the format but is not allowed in this kind of layer, such as <c>locked</c> in a group.</summary>
     public const string KeyNotAllowedInLayer = "SP0109";
+
+    /// <summary><c>locked:</c> names a rule that doesn't exist.</summary>
+    public const string UnknownLockedRule = "SP0110";
+
+    /// <summary>Two groups that match the same repo set the same rule to different values.</summary>
+    public const string GroupConflict = "SP0111";
+
+    /// <summary>A selector, scope or exclude glob has the wrong shape or unsupported syntax.</summary>
+    public const string InvalidGlob = "SP0112";
+
+    /// <summary>A selector or repo override names a target that targets.yml doesn't define.</summary>
+    public const string UnknownTarget = "SP0113";
+
+    /// <summary><c>allowedMergeTypes</c> is empty, which would block every pull request.</summary>
+    public const string NoMergeTypes = "SP0114";
+
+    /// <summary><c>minimumReviewers</c> is enabled without a count of at least 1.</summary>
+    public const string InvalidReviewerCount = "SP0115";
+
+    /// <summary>More than 10 reviewers for a GitHub repo, which rulesets don't allow.</summary>
+    public const string TooManyReviewersForGitHub = "SP0116";
+
+    /// <summary>An <c>auth:</c> method the target's platform doesn't support, such as <c>entra</c> on Azure DevOps Server.</summary>
+    public const string UnsupportedAuth = "SP0117";
+
+    /// <summary>A target is missing something it needs, such as <c>scope</c> on GitHub or <c>url</c> on Azure DevOps.</summary>
+    public const string IncompleteTarget = "SP0118";
+
+    /// <summary>A boolean rule written as <c>{ enabled: ... }</c>; plain <c>true</c> or <c>false</c> means the same.</summary>
+    public const string RedundantEnabledForm = "SP0119";
+
+    /// <summary>A repo override or exact selector names a repo outside its target's scope, so it can never apply.</summary>
+    public const string OutsideScope = "SP0120";
+
+    // 02xx: selection.
+
+    /// <summary>A selector glob matches no repo in scope.</summary>
+    public const string SelectorMatchesNothing = "SP0201";
+
+    /// <summary>An exact selector or repo override names a repo that doesn't exist.</summary>
+    public const string RepoNotFound = "SP0202";
+
+    // 21xx: ownership.
+
+    /// <summary>An unmanaged setting is stricter than the policy, so the effective result differs from the declared one.</summary>
+    public const string UnmanagedStricter = "SP2101";
+
+    // 22xx: matching live objects.
+
+    /// <summary>More than one live Azure DevOps policy matches a rule, so Setpoint leaves them alone.</summary>
+    public const string AmbiguousMatch = "SP2201";
+
+    // 30xx: platform capabilities.
+
+    /// <summary>A private repo on GitHub Free, where rulesets don't apply. It is skipped.</summary>
+    public const string PrivateRepoOnGitHubFree = "SP3001";
 }
