@@ -15,14 +15,16 @@ internal static class ArchitectureTestContext
     public const string GitHubAdapterAssemblyName = "Setpoint.Adapters.GitHub";
     public const string AzureDevOpsAdapterAssemblyName = "Setpoint.Adapters.AzureDevOps";
     public const string CliAssemblyName = "setpoint";
+    public const string HttpAssemblyName = "Setpoint.Http";
 
     private static readonly ReflectionAssembly s_coreAssembly = ReflectionAssembly.Load(CoreAssemblyName);
     private static readonly ReflectionAssembly s_gitHubAdapterAssembly = ReflectionAssembly.Load(GitHubAdapterAssemblyName);
     private static readonly ReflectionAssembly s_azureDevOpsAdapterAssembly = ReflectionAssembly.Load(AzureDevOpsAdapterAssemblyName);
     private static readonly ReflectionAssembly s_cliAssembly = ReflectionAssembly.Load(CliAssemblyName);
+    private static readonly ReflectionAssembly s_httpAssembly = ReflectionAssembly.Load(HttpAssemblyName);
 
     public static readonly ArchUnitNET.Domain.Architecture Architecture = new ArchLoader()
-        .LoadAssemblies(s_coreAssembly, s_gitHubAdapterAssembly, s_azureDevOpsAdapterAssembly, s_cliAssembly)
+        .LoadAssemblies(s_coreAssembly, s_gitHubAdapterAssembly, s_azureDevOpsAdapterAssembly, s_cliAssembly, s_httpAssembly)
         .Build();
 
     public static readonly IObjectProvider<IType> CoreLayer =
@@ -36,6 +38,18 @@ internal static class ArchitectureTestContext
 
     public static readonly IObjectProvider<IType> CliLayer =
         Types().That().ResideInAssembly(s_cliAssembly).As("CLI");
+
+    public static readonly IObjectProvider<IType> HttpLayer =
+        Types().That().ResideInAssembly(s_httpAssembly).As("HTTP core");
+
+    public static readonly IObjectProvider<IType> ProductionTypes =
+        Types().That().Are(CoreLayer).Or().Are(GitHubAdapter).Or().Are(AzureDevOpsAdapter).Or().Are(CliLayer).Or().Are(HttpLayer)
+            .As("Production code");
+
+    /// <summary>The members that replace or switch off TLS certificate validation.</summary>
+    public static readonly IObjectProvider<IType> CertificateValidationOverrides =
+        Types(true).That().HaveFullName("System.Net.Security.RemoteCertificateValidationCallback")
+            .As("certificate validation callbacks");
 
     public static readonly IObjectProvider<IType> Adapters =
         Types().That().Are(GitHubAdapter).Or().Are(AzureDevOpsAdapter).As("Adapters");

@@ -1,0 +1,9 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <ItemGroup>
+    <PackageReference Include="Microsoft.Extensions.Diagnostics.Testing" />
+    <PackageReference Include="WireMock.Net" />
+  </ItemGroup>
+  <ItemGroup>
+    <ProjectReference Include="..\..\src\Setpoint.Http\Setpoint.Http.csproj" />
+  </ItemGroup>
+</Project>

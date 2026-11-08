@@ -113,4 +113,46 @@ public sealed class DependencyArchitectureTests
         // Assert
         exception.ShouldBeNull();
     }
+
+    /// <summary>
+    /// Given the core, when dependency checks run, then it does not depend on the HTTP core.
+    /// </summary>
+    [Fact(DisplayName = "🏛️ Core does not depend on the HTTP core")]
+    public void CoreShouldNotDependOnHttp()
+    {
+        // Arrange
+        IArchRule rule = Types().That().Are(ArchitectureTestContext.CoreLayer)
+            .Should()
+            .NotDependOnAny(ArchitectureTestContext.HttpLayer)
+            .Because("the core plans offline from a neutral model; only adapters talk to platforms");
+
+        // Act
+        Exception? exception = Record.Exception(() => rule.Check(ArchitectureTestContext.Architecture));
+
+        // Assert
+        exception.ShouldBeNull();
+    }
+
+    /// <summary>
+    /// Given the HTTP core, when dependency checks run, then it depends on no other Setpoint project.
+    /// </summary>
+    [Fact(DisplayName = "🏛️ HTTP core depends on no other Setpoint project")]
+    public void HttpShouldNotDependOnOtherSetpointProjects()
+    {
+        // Arrange
+        IArchRule rule = Types().That().Are(ArchitectureTestContext.HttpLayer)
+            .Should()
+            .NotDependOnAny(ArchitectureTestContext.CoreLayer)
+            .AndShould()
+            .NotDependOnAny(ArchitectureTestContext.Adapters)
+            .AndShould()
+            .NotDependOnAny(ArchitectureTestContext.CliLayer)
+            .Because("the HTTP core is shared plumbing that both adapters build on, with no platform or policy knowledge");
+
+        // Act
+        Exception? exception = Record.Exception(() => rule.Check(ArchitectureTestContext.Architecture));
+
+        // Assert
+        exception.ShouldBeNull();
+    }
 }

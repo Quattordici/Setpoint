@@ -169,4 +169,25 @@ public sealed class SetpointCliTests
         // Assert
         run.ExitCode.ShouldNotBe(ExitCode.InvalidPolicyOrUsage);
     }
+
+    /// <summary>
+    /// Given the dev-only --record option,
+    /// when plan help is shown and plan is run with it,
+    /// then help doesn't list it but the option parses.
+    /// </summary>
+    [Fact(DisplayName = "🖐️ --record is hidden from help but accepted")]
+    public async Task RunAsync_RecordOption_HiddenButAccepted()
+    {
+        // Arrange
+        string[] help = ["plan", "--help"];
+        string[] withRecord = ["plan", "--record", Path.GetTempPath()];
+
+        // Act
+        CliRun helpRun = await CliRun.InvokeAsync(help);
+        CliRun recordRun = await CliRun.InvokeAsync(withRecord);
+
+        // Assert
+        helpRun.Out.ShouldNotContain("--record");
+        recordRun.ExitCode.ShouldNotBe(ExitCode.InvalidPolicyOrUsage);
+    }
 }

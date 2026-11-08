@@ -28,6 +28,7 @@ internal static class PlanCommand
             CommonOptions.Output(),
             CommonOptions.SkipUnreachable(),
             CommonOptions.AllowUnsupportedServer(),
+            CommonOptions.Record(),
         };
 
         command.SetAction((_, _) => NotImplemented.Report(console, "plan"));
