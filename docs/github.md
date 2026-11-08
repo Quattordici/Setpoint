@@ -16,7 +16,26 @@ targets:
 - With no `url:`, the target is github.com. Any other `url:` is treated as GitHub Enterprise Server, whose API lives at `<url>/api/v3/`.
 - Every call sends `X-GitHub-Api-Version: 2022-11-28`.
 - The token comes from `SETPOINT_<TARGET>_TOKEN` (the target name upper-cased, with every character other than a letter or digit replaced by `_`), or from the variable named in `tokenEnv:`. The preflight calls `GET /user` and reports the signed-in account as the identity.
-- `auth: app` arrives in a later build.
+- With `auth: app`, Setpoint signs in as a GitHub App (recommended for organizations). See below.
+
+### GitHub App
+
+```yaml
+targets:
+  github:
+    platform: github
+    auth: app
+    appId: 123456
+    scope: [acme/*]
+```
+
+- The App's private key (the PEM file GitHub gives you) goes in `SETPOINT_<TARGET>_APP_KEY`. PKCS#1 and PKCS#8 both work, and so does a key whose newlines a pipeline secret turned into `\n`.
+- Setpoint signs an RS256 JWT with the .NET runtime's own cryptography, finds the App's installation on each `scope:` owner (`GET /orgs/{owner}/installation`, or `/users/{owner}/installation`), and mints an installation token for it. A wildcard owner uses every installation (`GET /app/installations`).
+- Installation tokens last an hour. Setpoint mints a new one five minutes before expiry, so a long run doesn't fail half-way.
+- Repos are listed through `GET /installation/repositories`, so only repos the App was granted are seen.
+- The identity in the plan header is the App's bot account, such as `setpoint-governance[bot]`.
+- The key, the JWTs and the tokens are registered with the redactor and never appear in logs or `--record` fixtures.
+- The App needs Metadata: read and Administration: read for `plan`, Contents: read to check the merge flags, and Administration: write for `apply`.
 
 ## Listing
 

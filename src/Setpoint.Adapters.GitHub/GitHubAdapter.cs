@@ -2,6 +2,7 @@ using System.Collections.Concurrent;
 using System.Runtime.CompilerServices;
 using System.Text.Json.Nodes;
 using Setpoint.Adapters.GitHub.Api;
+using Setpoint.Adapters.GitHub.Auth;
 using Setpoint.Adapters.GitHub.Policy;
 using Setpoint.Adapters.GitHub.Rulesets;
 using Setpoint.Core.Diagnostics;
@@ -46,16 +47,16 @@ public sealed class GitHubAdapter : IProviderAdapter, IDisposable
     public async Task<TargetInfo> DescribeAsync(Target target, CancellationToken cancellationToken)
     {
         AuthMethod auth = target.Definition.Auth ?? AuthMethod.Pat;
-        if (auth != AuthMethod.Pat)
+        GitHubCredentials credentials = auth switch
         {
-            throw new NotSupportedException($"auth: {auth.ToString().ToLowerInvariant()} isn't available for GitHub in this build of Setpoint; use a token");
-        }
-
-        string variable = TargetCredentials.TokenVariable(target);
-        string token = _options.GetEnvironmentVariable(variable) is { Length: > 0 } value
-            ? value
-            : throw new InvalidOperationException($"the environment variable {variable} holding its token is not set");
-        _redactor.Add(token);
+            AuthMethod.Pat => new PatCredentials(Secret(TargetCredentials.TokenVariable(target), "token")),
+            AuthMethod.App => new AppCredentials(
+                target.Definition.AppId ?? throw new InvalidOperationException("auth: app needs the App's appId in targets.yml"),
+                GitHubAppJwt.ImportKey(Secret(TargetCredentials.AppKeyVariable(target), "App private key"), TargetCredentials.AppKeyVariable(target)),
+                _options.Time,
+                _redactor.Add),
+            _ => throw new NotSupportedException($"auth: {auth.ToString().ToLowerInvariant()} isn't available on GitHub; use pat or app"),
+        };
 
         Uri apiRoot = GitHubEndpoint.ApiRoot(target.Definition.Url);
         HttpClient http = TargetHttpClientFactory.Create(
@@ -64,23 +65,38 @@ public sealed class GitHubAdapter : IProviderAdapter, IDisposable
             _options.Http,
             _options.Logger,
             _redactor,
-            [new BearerTokenHandler(token)],
+            [new GitHubAuthHandler(credentials)],
             timeProvider: _options.Time);
         var api = new GitHubApiClient(http);
         try
         {
-            (GitHubUser user, string? enterpriseVersion) = await api.GetUserAsync(cancellationToken).ConfigureAwait(false);
-            if (_sessions.TryRemove(target.Name, out Session? previous))
+            Session session;
+            string? enterpriseVersion;
+            if (credentials is AppCredentials app)
             {
-                previous.Api.Dispose();
+                app.Attach(api);
+                (GitHubApp self, enterpriseVersion) = await api.GetAppAsync(cancellationToken).ConfigureAwait(false);
+                await FindInstallationsAsync(api, app, target, cancellationToken).ConfigureAwait(false);
+                session = new Session(api, $"{self.Slug}[bot]", app);
+            }
+            else
+            {
+                (GitHubUser user, enterpriseVersion) = await api.GetUserAsync(cancellationToken).ConfigureAwait(false);
+                session = new Session(api, user.Login, null);
             }
 
-            _sessions[target.Name] = new Session(api, user.Login);
-            return new TargetInfo(GitHubEndpoint.Describe(apiRoot, enterpriseVersion), GitHubApiClient.ApiVersion, user.Login);
+            if (_sessions.TryRemove(target.Name, out Session? previous))
+            {
+                previous.Dispose();
+            }
+
+            _sessions[target.Name] = session;
+            return new TargetInfo(GitHubEndpoint.Describe(apiRoot, enterpriseVersion), GitHubApiClient.ApiVersion, session.Login);
         }
         catch
         {
             api.Dispose();
+            (credentials as IDisposable)?.Dispose();
             throw;
         }
     }
@@ -93,9 +109,11 @@ public sealed class GitHubAdapter : IProviderAdapter, IDisposable
         bool anyOwner = owners.Any(o => o.Contains('*', StringComparison.Ordinal) || o.Contains('?', StringComparison.Ordinal));
 
         var seen = new HashSet<RepoRef>();
-        IEnumerable<IAsyncEnumerable<GitHubRepository>> sources = anyOwner
-            ? [session.Api.ListAccessibleReposAsync(cancellationToken)]
-            : owners.Select(o => session.Api.ListOwnerReposAsync(o, o.Equals(session.Login, StringComparison.OrdinalIgnoreCase), cancellationToken));
+        IEnumerable<IAsyncEnumerable<GitHubRepository>> sources = session.App is { } app
+            ? app.Owners.Select(o => session.Api.ListInstallationReposAsync(o, cancellationToken))
+            : anyOwner
+                ? [session.Api.ListAccessibleReposAsync(cancellationToken)]
+                : owners.Select(o => session.Api.ListOwnerReposAsync(o, o.Equals(session.Login, StringComparison.OrdinalIgnoreCase), cancellationToken));
 
         foreach (IAsyncEnumerable<GitHubRepository> source in sources)
         {
@@ -245,7 +263,7 @@ public sealed class GitHubAdapter : IProviderAdapter, IDisposable
     {
         foreach (Session session in _sessions.Values)
         {
-            session.Api.Dispose();
+            session.Dispose();
         }
 
         _sessions.Clear();
@@ -369,5 +387,41 @@ public sealed class GitHubAdapter : IProviderAdapter, IDisposable
             ? session
             : throw new InvalidOperationException($"Target '{target}' hasn't been described yet.");
 
-    private sealed record Session(GitHubApiClient Api, string Login);
+    private string Secret(string variable, string what)
+    {
+        string value = _options.GetEnvironmentVariable(variable) is { Length: > 0 } set
+            ? set
+            : throw new InvalidOperationException($"the environment variable {variable} holding its {what} is not set");
+        _redactor.Add(value);
+        return value;
+    }
+
+    // An App sees only the accounts it is installed on: one per literal scope owner, or all of them for a wildcard.
+    private static async Task FindInstallationsAsync(GitHubApiClient api, AppCredentials app, Target target, CancellationToken cancellationToken)
+    {
+        string[] owners = [.. (target.Definition.Scope ?? []).Select(g => g.Split('/')[0]).Distinct(StringComparer.OrdinalIgnoreCase)];
+        if (owners.Any(o => o.Contains('*', StringComparison.Ordinal) || o.Contains('?', StringComparison.Ordinal)))
+        {
+            foreach (GitHubInstallation installation in await api.ListInstallationsAsync(cancellationToken).ConfigureAwait(false))
+            {
+                app.AddInstallation(installation.Account.Login, installation.Id);
+            }
+        }
+
+        foreach (string owner in owners.Where(o => !o.Contains('*', StringComparison.Ordinal) && !o.Contains('?', StringComparison.Ordinal)))
+        {
+            GitHubInstallation installation = await api.FindInstallationAsync(owner, cancellationToken).ConfigureAwait(false)
+                ?? throw new InvalidOperationException($"the GitHub App isn't installed on '{owner}'; install it there or take the owner out of scope");
+            app.AddInstallation(installation.Account.Login, installation.Id);
+        }
+    }
+
+    private sealed record Session(GitHubApiClient Api, string Login, AppCredentials? App) : IDisposable
+    {
+        public void Dispose()
+        {
+            Api.Dispose();
+            App?.Dispose();
+        }
+    }
 }

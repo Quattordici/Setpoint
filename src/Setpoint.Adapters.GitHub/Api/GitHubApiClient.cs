@@ -3,6 +3,7 @@ using System.Runtime.CompilerServices;
 using System.Text.Json;
 using System.Text.Json.Nodes;
 using System.Text.Json.Serialization.Metadata;
+using Setpoint.Adapters.GitHub.Auth;
 using Setpoint.Http;
 
 namespace Setpoint.Adapters.GitHub.Api;
@@ -136,6 +137,79 @@ internal sealed class GitHubApiClient(HttpClient http) : IDisposable
     public Task<HttpResponseMessage> DeleteRulesetAsync(string owner, string name, long id, CancellationToken cancellationToken) =>
         SendAsync(HttpMethod.Delete, $"{RepoPath(owner, name)}/rulesets/{id}", null, cancellationToken);
 
+    /// <summary>The App, as itself.</summary>
+    public async Task<(GitHubApp App, string? EnterpriseVersion)> GetAppAsync(CancellationToken cancellationToken)
+    {
+        using HttpResponseMessage response = await SendAsync(HttpMethod.Get, "app", null, null, asApp: true, cancellationToken).ConfigureAwait(false);
+        GitHubApp app = await HttpJson.ReadAsync(response, GitHubApiJsonContext.Default.GitHubApp, cancellationToken).ConfigureAwait(false);
+        string? version = response.Headers.TryGetValues(EnterpriseVersionHeader, out IEnumerable<string>? values) ? values.FirstOrDefault() : null;
+        return (app, version);
+    }
+
+    /// <summary>The App's installation on an organization or user, or null when it isn't installed there.</summary>
+    public async Task<GitHubInstallation?> FindInstallationAsync(string owner, CancellationToken cancellationToken)
+    {
+        foreach (string path in new[] { $"orgs/{Segment(owner)}/installation", $"users/{Segment(owner)}/installation" })
+        {
+            using HttpResponseMessage response = await SendAsync(HttpMethod.Get, path, null, null, asApp: true, cancellationToken).ConfigureAwait(false);
+            if (response.StatusCode != HttpStatusCode.NotFound)
+            {
+                return await HttpJson.ReadAsync(response, GitHubApiJsonContext.Default.GitHubInstallation, cancellationToken).ConfigureAwait(false);
+            }
+        }
+
+        return null;
+    }
+
+    /// <summary>Every installation of the App, for scopes whose owner part is a wildcard.</summary>
+    public async Task<List<GitHubInstallation>> ListInstallationsAsync(CancellationToken cancellationToken)
+    {
+        var installations = new List<GitHubInstallation>();
+        string? next = $"app/installations?per_page={PageSize}";
+        while (next is not null)
+        {
+            using HttpResponseMessage response = await SendAsync(HttpMethod.Get, next, null, null, asApp: true, cancellationToken).ConfigureAwait(false);
+            installations.AddRange(await HttpJson.ReadAsync(response, GitHubApiJsonContext.Default.ListGitHubInstallation, cancellationToken).ConfigureAwait(false));
+            next = NextPage(response);
+        }
+
+        return installations;
+    }
+
+    /// <summary>Mints an installation token, valid for an hour.</summary>
+    public async Task<GitHubInstallationToken> CreateInstallationTokenAsync(long installationId, CancellationToken cancellationToken)
+    {
+        using HttpResponseMessage response = await SendAsync(HttpMethod.Post, $"app/installations/{installationId}/access_tokens", null, null, asApp: true, cancellationToken).ConfigureAwait(false);
+        return await HttpJson.ReadAsync(response, GitHubApiJsonContext.Default.GitHubInstallationToken, cancellationToken).ConfigureAwait(false);
+    }
+
+    /// <summary>The repos an installation can reach, signed with that owner's installation token.</summary>
+    public async IAsyncEnumerable<GitHubRepository> ListInstallationReposAsync(string owner, [EnumeratorCancellation] CancellationToken cancellationToken)
+    {
+        string? next = $"installation/repositories?per_page={PageSize}";
+        while (next is not null)
+        {
+            using HttpResponseMessage response = await SendAsync(HttpMethod.Get, next, null, owner, asApp: false, cancellationToken).ConfigureAwait(false);
+            GitHubInstallationRepositories page = await HttpJson.ReadAsync(response, GitHubApiJsonContext.Default.GitHubInstallationRepositories, cancellationToken).ConfigureAwait(false);
+            foreach (GitHubRepository repo in page.Repositories)
+            {
+                yield return repo;
+            }
+
+            next = NextPage(response);
+        }
+    }
+
+    // The owner a repo, organization or user call is about, so App auth signs it with that owner's installation.
+    // Next-page links are absolute, so the owner is found by its place after repos/, orgs/ or users/ in the path.
+    private static string? OwnerOf(string uri)
+    {
+        string path = Uri.TryCreate(uri, UriKind.Absolute, out Uri? absolute) ? absolute.AbsolutePath : uri.Split('?')[0];
+        string[] parts = path.Split('/', StringSplitOptions.RemoveEmptyEntries);
+        int at = Array.FindIndex(parts, p => p is "repos" or "orgs" or "users");
+        return at >= 0 && at + 1 < parts.Length ? Uri.UnescapeDataString(parts[at + 1]) : null;
+    }
+
     /// <inheritdoc />
     public void Dispose() => http.Dispose();
 
@@ -146,9 +220,22 @@ internal sealed class GitHubApiClient(HttpClient http) : IDisposable
     private Task<HttpResponseMessage> SendAsync(string uri, CancellationToken cancellationToken) =>
         SendAsync(HttpMethod.Get, uri, null, cancellationToken);
 
-    private async Task<HttpResponseMessage> SendAsync(HttpMethod method, string uri, JsonObject? body, CancellationToken cancellationToken)
+    private Task<HttpResponseMessage> SendAsync(HttpMethod method, string uri, JsonObject? body, CancellationToken cancellationToken) =>
+        SendAsync(method, uri, body, OwnerOf(uri), asApp: false, cancellationToken);
+
+    private async Task<HttpResponseMessage> SendAsync(HttpMethod method, string uri, JsonObject? body, string? owner, bool asApp, CancellationToken cancellationToken)
     {
         using var request = new HttpRequestMessage(method, uri);
+        if (owner is not null)
+        {
+            request.Options.Set(GitHubCredentials.Owner, owner);
+        }
+
+        if (asApp)
+        {
+            request.Options.Set(GitHubCredentials.AsApp, true);
+        }
+
         request.Headers.Accept.ParseAdd("application/vnd.github+json");
         request.Headers.Add("X-GitHub-Api-Version", ApiVersion);
         if (body is not null)

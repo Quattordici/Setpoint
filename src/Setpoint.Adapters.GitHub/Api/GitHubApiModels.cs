@@ -74,6 +74,18 @@ internal sealed record GitHubBranchRule
     public long? RulesetId { get; init; }
 }
 
+/// <summary>The App itself, from <c>GET /app</c>.</summary>
+internal sealed record GitHubApp(string Slug);
+
+/// <summary>An installation of the App on an account.</summary>
+internal sealed record GitHubInstallation(long Id, GitHubAccount Account);
+
+/// <summary>An installation token, from <c>POST /app/installations/{id}/access_tokens</c>. It expires after an hour.</summary>
+internal sealed record GitHubInstallationToken(string Token, DateTimeOffset ExpiresAt);
+
+/// <summary>A page of <c>GET /installation/repositories</c>.</summary>
+internal sealed record GitHubInstallationRepositories(List<GitHubRepository> Repositories);
+
 /// <summary>The GitHub REST API's JSON contract: snake_case, and every field Setpoint doesn't read is ignored.</summary>
 [JsonSourceGenerationOptions(PropertyNamingPolicy = JsonKnownNamingPolicy.SnakeCaseLower)]
 [JsonSerializable(typeof(GitHubUser))]
@@ -83,4 +95,9 @@ internal sealed record GitHubBranchRule
 [JsonSerializable(typeof(List<GitHubRulesetSummary>))]
 [JsonSerializable(typeof(List<GitHubBranchRule>))]
 [JsonSerializable(typeof(JsonObject))]
+[JsonSerializable(typeof(GitHubApp))]
+[JsonSerializable(typeof(GitHubInstallation))]
+[JsonSerializable(typeof(List<GitHubInstallation>))]
+[JsonSerializable(typeof(GitHubInstallationToken))]
+[JsonSerializable(typeof(GitHubInstallationRepositories))]
 internal sealed partial class GitHubApiJsonContext : JsonSerializerContext;
