@@ -41,6 +41,7 @@ Every problem Setpoint reports has a stable `SPxxxx` code. A code never changes 
 | SP1001 | error | Target unreachable | A target can't be reached, or failed its preflight. No plan file is written; `--skip-unreachable` leaves the target out and makes this a warning. |
 | SP1002 | error | Repo read failed | Reading one repo's live state failed. The other repos are still planned, and plan exits 1. |
 | SP2101 | warning | Unmanaged setting is stricter | A setting no rule declares is stricter than the policy, so the effective result differs from the declared one. |
+| SP2102 | error | No merge method left | Unmanaged merge settings, such as GitHub's repo-level `allow_*_merge` flags or another ruleset, together with `allowedMergeTypes` leave no merge method, so pull requests couldn't complete. |
 | SP2201 | warning | Ambiguous live match | More than one live Azure DevOps policy matches a rule, so Setpoint leaves them alone. |
 | SP2202 | warning | Live value unknown | The token can't see a live setting, such as GitHub bypass actors, so plan reports it as unknown instead of as a change. |
 | SP3001 | warning | Private repo on GitHub Free skipped | Rulesets don't apply to private repos on GitHub Free, so the repo is skipped. |

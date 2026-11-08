@@ -30,9 +30,54 @@ public sealed class PlanCommandTests : IDisposable
         _azureDevOps.AddRepo(new RepoRef("ado-onprem", "Payments", "legacy-ledger"));
     }
 
-    private CliServices Services => new([_github, _azureDevOps], new FixedTimeProvider(new DateTimeOffset(2026, 11, 8, 12, 0, 0, TimeSpan.Zero)));
+    private CliServices Services => CliServices.With([_github, _azureDevOps], new FixedTimeProvider(new DateTimeOffset(2026, 11, 8, 12, 0, 0, TimeSpan.Zero)));
 
     public void Dispose() => _scratch.Delete(recursive: true);
+
+    /// <summary>
+    /// Given the hidden dev-only --record option,
+    /// when plan runs,
+    /// then the adapters it creates are told to record HTTP exchanges into that directory.
+    /// </summary>
+    [Fact(DisplayName = "🖐️ plan --record passes the recording directory to the adapters")]
+    public async Task Plan_Record_PassesDirectoryToAdapters()
+    {
+        // Arrange
+        AdapterSettings? settings = null;
+        var services = new CliServices(
+            given =>
+            {
+                settings = given;
+                return [_github, _azureDevOps];
+            },
+            TimeProvider.System);
+        string recordings = Path.Combine(_scratch.FullName, "fixtures");
+
+        // Act
+        await CliRun.InvokeAsync(services, "plan", "-p", s_policy, "--record", recordings);
+
+        // Assert
+        settings.ShouldNotBeNull().Http.RecordDirectory.ShouldBe(recordings);
+    }
+
+    /// <summary>
+    /// Given the production services,
+    /// when they create a run's adapters,
+    /// then the GitHub adapter is among them.
+    /// </summary>
+    [Fact(DisplayName = "👍 The production services include the GitHub adapter")]
+    public void Default_CreateAdapters_IncludesGitHub()
+    {
+        // Act
+        IReadOnlyList<Setpoint.Core.Providers.IProviderAdapter> adapters = CliServices.Default.CreateAdapters(new AdapterSettings(new Setpoint.Http.HttpCoreOptions()));
+
+        // Assert
+        adapters.ShouldContain(a => a is Setpoint.Adapters.GitHub.GitHubAdapter);
+        foreach (IDisposable adapter in adapters.OfType<IDisposable>())
+        {
+            adapter.Dispose();
+        }
+    }
 
     /// <summary>
     /// Given the test policy and repos with nothing live,
@@ -94,7 +139,7 @@ public sealed class PlanCommandTests : IDisposable
 
         // Act
         CliRun withChanges = await CliRun.InvokeAsync(Services, "plan", "-p", s_policy, "--exit-code", "-o", "plain");
-        CliRun withoutChanges = await CliRun.InvokeAsync(new CliServices([inLine, adoEmpty], TimeProvider.System), "plan", "-p", policy, "--exit-code", "-o", "plain");
+        CliRun withoutChanges = await CliRun.InvokeAsync(CliServices.With([inLine, adoEmpty], TimeProvider.System), "plan", "-p", policy, "--exit-code", "-o", "plain");
 
         // Assert
         withChanges.ExitCode.ShouldBe(ExitCode.ChangesFound);

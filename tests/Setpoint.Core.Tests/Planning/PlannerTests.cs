@@ -195,6 +195,49 @@ public sealed class PlannerTests
     }
 
     /// <summary>
+    /// Given unmanaged settings that allow only rebase, and then only merge, and a policy that allows squash and rebase,
+    /// when the repo is planned,
+    /// then SP2102 is an error naming every source, because together they leave no merge method.
+    /// </summary>
+    [Fact(DisplayName = "👎 Unmanaged merge settings that leave no merge method raise SP2102")]
+    public async Task Plan_NoMergeMethodLeft_FailsSP2102()
+    {
+        // Arrange
+        _builder.WithBaseline(Baseline("allowedMergeTypes: [squash, rebase]"));
+        FakeProviderAdapter.FakeRepo live = _adapter.AddRepo(Repo).WithLive("allowedMergeTypes", """["rebase", "squash"]""");
+        live.Unmanaged.Add(new UnmanagedSetting("allowedMergeTypes", "repo merge settings", System.Text.Json.Nodes.JsonNode.Parse("""["rebase"]""")));
+        live.Unmanaged.Add(new UnmanagedSetting("allowedMergeTypes", "ruleset 'org-merge'", System.Text.Json.Nodes.JsonNode.Parse("""["merge"]""")));
+
+        // Act
+        PlanResult result = await PlanAsync();
+
+        // Assert
+        Diagnostic error = result.Diagnostics.Single(d => d.Code == DiagnosticCodes.NoMergeMethodLeft);
+        error.Severity.ShouldBe(DiagnosticSeverity.Error);
+        error.Message.ShouldContain("repo merge settings allows rebase; ruleset 'org-merge' allows merge");
+    }
+
+    /// <summary>
+    /// Given an unmanaged merge restriction that still leaves a method the policy allows,
+    /// when the repo is planned,
+    /// then there is no SP2102, only the SP2101 warning that it is stricter.
+    /// </summary>
+    [Fact(DisplayName = "🖐️ A merge restriction that leaves a method is only a warning")]
+    public async Task Plan_MergeMethodLeft_OnlyWarns()
+    {
+        // Arrange
+        _builder.WithBaseline(Baseline("allowedMergeTypes: [squash, rebase]"));
+        _adapter.AddRepo(Repo).WithLive("allowedMergeTypes", """["rebase", "squash"]""")
+            .Unmanaged.Add(new UnmanagedSetting("allowedMergeTypes", "repo merge settings", System.Text.Json.Nodes.JsonNode.Parse("""["squash"]""")));
+
+        // Act
+        PlanResult result = await PlanAsync();
+
+        // Assert
+        result.Diagnostics.ShouldHaveSingleItem().Code.ShouldBe(DiagnosticCodes.UnmanagedStricter);
+    }
+
+    /// <summary>
     /// Given an unmanaged ruleset requiring 3 approvals and a policy requiring 2,
     /// when the repo is planned,
     /// then SP2101 warns that the effective result is stricter than declared.
