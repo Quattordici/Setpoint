@@ -1,0 +1,17 @@
+{
+  "Title": "ghe #1: POST /api/v3/repos/acme/payments/rulesets",
+  "Request": {
+    "Path": "/api/v3/repos/acme/payments/rulesets",
+    "Methods": [
+      "POST"
+    ]
+  },
+  "Response": {
+    "StatusCode": 201,
+    "Headers": {
+      "Content-Type": "application/json; charset=utf-8",
+      "X-GitHub-Api-Version-Selected": "2022-11-28"
+    },
+    "Body": "{\"id\": 4242, \"name\": \"setpoint\", \"target\": \"branch\", \"source_type\": \"Repository\", \"source\": \"acme/payments\", \"enforcement\": \"active\", \"conditions\": {\"ref_name\": {\"include\": [\"~DEFAULT_BRANCH\"], \"exclude\": []}}, \"rules\": [{\"type\": \"non_fast_forward\"}, {\"type\": \"deletion\"}], \"bypass_actors\": [], \"current_user_can_bypass\": \"never\", \"node_id\": \"RRS_lACqUmVwb3NpdG9yec4\", \"created_at\": \"2026-11-08T20:30:00Z\", \"updated_at\": \"2026-11-08T20:30:00Z\", \"_links\": {\"self\": {\"href\": \"https://ghe.example.com/api/v3/repos/acme/payments/rulesets/4242\"}}}"
+  }
+}

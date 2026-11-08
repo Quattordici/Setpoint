@@ -1,0 +1,16 @@
+{
+  "Title": "ghe #3: DELETE /api/v3/repos/acme/payments/rulesets/4243",
+  "Request": {
+    "Path": "/api/v3/repos/acme/payments/rulesets/4243",
+    "Methods": [
+      "DELETE"
+    ]
+  },
+  "Response": {
+    "StatusCode": 204,
+    "Headers": {
+      "X-GitHub-Api-Version-Selected": "2022-11-28"
+    },
+    "Body": ""
+  }
+}

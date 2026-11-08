@@ -49,6 +49,14 @@ A private repo is tested by asking for its rulesets. On GitHub Free that answers
 - A `setpoint` ruleset that is disabled, or that doesn't target exactly the default branch, reads as carrying no rules. The next apply makes it active on the default branch again.
 - The fingerprint leaves out `_links`, `current_user_can_bypass` and `bypass_actors`, because they depend on who reads the ruleset, and plan and apply use different tokens. Any edit still moves `updated_at`, so the stale check catches it.
 
+## Apply
+
+`apply` writes only the `setpoint` ruleset: `POST /repos/{owner}/{repo}/rulesets` to create it, `PUT .../rulesets/{id}` to update it, and `DELETE .../rulesets/{id}` when the policy leaves it no rule. The planned payload is sent exactly as the plan holds it, and nothing is recomputed. The adapter refuses any planned object that isn't the `setpoint` ruleset, so other rulesets, classic branch protection and repo settings are never written.
+
+A created ruleset has no bypass actors unless the policy declares `github.bypassActors`. An existing ruleset keeps the bypass actors it has while the policy leaves them undeclared, because they are reported as unmanaged rather than removed silently.
+
+A failed write fails that repo, and the repo's later writes are not attempted. A 403 names the permission the token needs: Administration: write, or the `repo` scope on a classic token.
+
 ## Unmanaged settings
 
 - **Other rulesets** that apply to the default branch, including organization rulesets, are read from `GET /repos/{owner}/{repo}/rules/branches/{branch}`. Each rule is reported under the neutral rule it bears on, or as `github.<type>` when it has none. A stricter one raises `SP2101`.

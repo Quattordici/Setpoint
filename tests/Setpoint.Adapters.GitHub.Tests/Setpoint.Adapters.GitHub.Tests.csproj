@@ -9,4 +9,7 @@
     <Compile Include="..\Setpoint.Http.Tests\TestSupport\WireMockServerFactory.cs" Link="TestSupport\WireMockServerFactory.cs" />
     <Compile Include="..\Setpoint.Http.Tests\TestSupport\WireMockPortAllocator.cs" Link="TestSupport\WireMockPortAllocator.cs" />
   </ItemGroup>
+  <ItemGroup>
+    <None Include="Fixtures\**\*.json" CopyToOutputDirectory="PreserveNewest" />
+  </ItemGroup>
 </Project>
