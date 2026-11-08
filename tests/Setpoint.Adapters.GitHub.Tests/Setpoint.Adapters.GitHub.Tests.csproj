@@ -1,5 +1,16 @@
 <Project Sdk="Microsoft.NET.Sdk">
   <ItemGroup>
+    <PackageReference Include="Microsoft.Extensions.Diagnostics.Testing" />
+    <PackageReference Include="WireMock.Net" />
+  </ItemGroup>
+  <ItemGroup>
     <ProjectReference Include="..\..\src\Setpoint.Adapters.GitHub\Setpoint.Adapters.GitHub.csproj" />
+  </ItemGroup>
+  <ItemGroup>
+    <Compile Include="..\Setpoint.Http.Tests\TestSupport\WireMockServerFactory.cs" Link="TestSupport\WireMockServerFactory.cs" />
+    <Compile Include="..\Setpoint.Http.Tests\TestSupport\WireMockPortAllocator.cs" Link="TestSupport\WireMockPortAllocator.cs" />
+  </ItemGroup>
+  <ItemGroup>
+    <None Include="Fixtures\**\*.json" CopyToOutputDirectory="PreserveNewest" />
   </ItemGroup>
 </Project>

@@ -5,6 +5,8 @@ using Setpoint.Core;
 using Setpoint.Core.Diagnostics;
 using Setpoint.Core.Planning;
 using Setpoint.Core.Policy.Loading;
+using Setpoint.Core.Providers;
+using Setpoint.Http;
 using Spectre.Console;
 
 namespace Setpoint.Cli.Commands;
@@ -34,6 +36,7 @@ internal static class PlanCommand
         Option<bool> skipUnreachable = CommonOptions.SkipUnreachable();
         Option<bool> allowUnsupportedServer = CommonOptions.AllowUnsupportedServer();
         Option<int> maxChanges = CommonOptions.MaxChanges();
+        Option<DirectoryInfo?> record = CommonOptions.Record();
 
         var command = new Command("plan", "Read live state and show the changes apply would make.")
         {
@@ -47,7 +50,7 @@ internal static class PlanCommand
             skipUnreachable,
             allowUnsupportedServer,
             maxChanges,
-            CommonOptions.Record(),
+            record,
         };
 
         command.SetAction(async (result, cancellationToken) => (int)await RunAsync(
@@ -60,7 +63,8 @@ internal static class PlanCommand
                 result.GetValue(exitCode),
                 result.GetValue(verbose),
                 OutputFormatResolver.Resolve(result.GetValue(output), console.Out),
-                new PlanOptions(result.GetValue(strict), result.GetValue(skipUnreachable), result.GetValue(allowUnsupportedServer), result.GetValue(maxChanges))),
+                new PlanOptions(result.GetValue(strict), result.GetValue(skipUnreachable), result.GetValue(allowUnsupportedServer), result.GetValue(maxChanges)),
+                result.GetValue(record)),
             cancellationToken));
         return command;
     }
@@ -78,9 +82,21 @@ internal static class PlanCommand
             return ExitCode.InvalidPolicyOrUsage;
         }
 
-        var planner = new Planner(services.Adapters, ProviderBlocks.All, services.Time);
-        var input = new PlanInput(load.Repo, load.Sources, PolicyCommit.Find(arguments.Policy.FullName));
-        PlanResult result = await planner.PlanAsync(input, arguments.Options, cancellationToken);
+        IReadOnlyList<IProviderAdapter> adapters = services.CreateAdapters(new AdapterSettings(new HttpCoreOptions { RecordDirectory = arguments.Record?.FullName }));
+        PlanResult result;
+        try
+        {
+            var planner = new Planner(adapters, ProviderBlocks.All, services.Time);
+            var input = new PlanInput(load.Repo, load.Sources, PolicyCommit.Find(arguments.Policy.FullName));
+            result = await planner.PlanAsync(input, arguments.Options, cancellationToken);
+        }
+        finally
+        {
+            foreach (IDisposable adapter in adapters.OfType<IDisposable>())
+            {
+                adapter.Dispose();
+            }
+        }
 
         IReadOnlyList<Diagnostic> diagnostics = [.. policyDiagnostics, .. result.Diagnostics];
         bool hasErrors = diagnostics.HasErrors();
@@ -136,4 +152,5 @@ internal sealed record PlanArguments(
     bool ExitCode,
     bool Verbose,
     OutputFormat Format,
-    PlanOptions Options);
+    PlanOptions Options,
+    DirectoryInfo? Record = null);

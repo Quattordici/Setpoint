@@ -17,6 +17,10 @@ public sealed record Diagnostic(string Code, DiagnosticSeverity Severity, string
     public static Diagnostic Warning(string code, string message, SourceLocation? location = null) =>
         new(code, DiagnosticSeverity.Warning, message, location);
 
+    /// <summary>Creates an info message, such as a repo skipped on purpose.</summary>
+    public static Diagnostic Info(string code, string message, SourceLocation? location = null) =>
+        new(code, DiagnosticSeverity.Info, message, location);
+
     /// <inheritdoc />
     public override string ToString()
     {

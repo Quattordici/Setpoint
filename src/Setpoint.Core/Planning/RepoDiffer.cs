@@ -167,6 +167,42 @@ public static class RepoDiffer
             }
         }
 
+        CheckMergeMethodsLeft(desired, live, diagnostics);
         return unmanaged;
     }
+
+    // Unmanaged merge restrictions, such as GitHub's repo-level merge flags or another ruleset, add to the policy's.
+    // When together they allow no merge method at all, no pull request can complete, so that is an error.
+    private static void CheckMergeMethodsLeft(DesiredState desired, LiveSnapshot live, List<Diagnostic> diagnostics)
+    {
+        const string rule = "allowedMergeTypes";
+        if (!desired.Rules.TryGetValue(rule, out DesiredRule? declared) || declared.Value is not JsonArray declaredTypes)
+        {
+            return;
+        }
+
+        List<UnmanagedSetting> restrictions = [.. live.Unmanaged.Where(s => s.Rule == rule && s.Value is JsonArray)];
+        if (restrictions.Count == 0)
+        {
+            return;
+        }
+
+        var left = new HashSet<string>(MergeTypes(declaredTypes), StringComparer.Ordinal);
+        foreach (UnmanagedSetting restriction in restrictions)
+        {
+            left.IntersectWith(MergeTypes(restriction.Value));
+        }
+
+        if (left.Count == 0)
+        {
+            string others = string.Join("; ", restrictions.Select(r => $"{r.Source} allows {ValueText.Format(r.Value)}"));
+            diagnostics.Add(Diagnostic.Error(
+                DiagnosticCodes.NoMergeMethodLeft,
+                $"{rule}: the policy allows {ValueText.Format(declaredTypes)}, but {others}. Together they leave no merge method, " +
+                "so pull requests couldn't complete. Change the policy or the unmanaged setting so at least one method is in both."));
+        }
+    }
+
+    private static IEnumerable<string> MergeTypes(JsonNode? node) =>
+        node is JsonArray array ? array.Select(e => e?.GetValue<string>()).OfType<string>() : [];
 }
