@@ -1,1 +1,47 @@
 # Setpoint
+
+Setpoint, repository governance as code for GitHub and Azure DevOps.
+
+Declare pull-request rules once in YAML, in a central policy repo, and Setpoint brings every repository on GitHub, Azure DevOps Services and Azure DevOps Server 2022 in line with them, through `validate`, `plan` and `apply`.
+
+> **Status:** early development. The commands exist but don't do anything yet. Progress is tracked in [the MVP build issue](https://github.com/Quattordici/Setpoint/issues/24).
+
+## Commands
+
+| Command | Does |
+|---|---|
+| `setpoint validate` | Offline checks of the policy repo against the schema and merge rules |
+| `setpoint plan [--out plan.json] [--json] [--exit-code]` | Reads live state and shows the changes apply would make |
+| `setpoint apply plan.json` | Applies a saved plan, after checking nothing moved since it was made |
+| `setpoint apply --yes` | Re-plans and applies in one step |
+
+## Building
+
+You need the .NET 10 SDK.
+
+```sh
+dotnet build Setpoint.slnx
+dotnet test --solution Setpoint.slnx
+```
+
+To try the tool from a local package:
+
+```sh
+dotnet pack src/Setpoint.Cli -c Release -o artifacts/packages
+dotnet tool install Setpoint --tool-path artifacts/tool --add-source artifacts/packages --prerelease
+artifacts/tool/setpoint --help
+```
+
+## Layout
+
+| Project | Role |
+|---|---|
+| `src/Setpoint.Core` | The neutral model and all the thinking: policy loading and merge, diff, plan, fingerprints |
+| `src/Setpoint.Adapters.GitHub` | Translates between the neutral model and the GitHub rulesets API |
+| `src/Setpoint.Adapters.AzureDevOps` | Translates between the neutral model and the Azure DevOps policy and security APIs |
+| `src/Setpoint.Cli` | The `setpoint` dotnet tool (NuGet id `Setpoint`): command parsing and terminal output |
+| `tests/*` | Unit tests per project, plus architecture tests that keep the core/adapter split honest |
+
+## Licence
+
+[MIT](LICENSE)

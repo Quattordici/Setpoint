@@ -1,0 +1,75 @@
+name: CI
+
+on:
+  pull_request:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+env:
+  DOTNET_NOLOGO: true
+  DOTNET_CLI_TELEMETRY_OPTOUT: true
+
+jobs:
+  build-and-test:
+    name: Build and test (${{ matrix.os }})
+    strategy:
+      fail-fast: false
+      matrix:
+        # Windows is in the matrix because pipelines on ADO Server agents are often Windows,
+        # and auth: integrated is Windows-only.
+        os: [ubuntu-latest, windows-latest]
+    runs-on: ${{ matrix.os }}
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-dotnet@v4
+        with:
+          global-json-file: global.json
+
+      - name: Restore
+        run: dotnet restore Setpoint.slnx
+
+      - name: Check formatting
+        if: matrix.os == 'ubuntu-latest'
+        run: dotnet format Setpoint.slnx --no-restore --verify-no-changes
+
+      - name: Build
+        run: dotnet build Setpoint.slnx --no-restore --configuration Release
+
+      - name: Test
+        run: dotnet test --solution Setpoint.slnx --no-build --configuration Release --report-xunit-trx --results-directory artifacts/test-results
+
+      - name: Pack the tool
+        run: dotnet pack src/Setpoint.Cli --no-build --configuration Release --output artifacts/packages
+
+      - name: Install the tool from the local package and print help
+        shell: bash
+        run: |
+          dotnet tool install Setpoint --tool-path artifacts/tool --add-source artifacts/packages --prerelease
+          artifacts/tool/setpoint --help
+          artifacts/tool/setpoint validate --help
+          artifacts/tool/setpoint plan --help
+          artifacts/tool/setpoint apply --help
+
+      - name: Upload test results
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: test-results-${{ matrix.os }}
+          path: artifacts/test-results
+
+      - name: Upload package
+        if: matrix.os == 'ubuntu-latest'
+        uses: actions/upload-artifact@v4
+        with:
+          name: package
+          path: artifacts/packages/*.nupkg

@@ -1,0 +1,13 @@
+<Solution>
+  <Folder Name="/src/">
+    <Project Path="src/Setpoint.Adapters.AzureDevOps/Setpoint.Adapters.AzureDevOps.csproj" />
+    <Project Path="src/Setpoint.Adapters.GitHub/Setpoint.Adapters.GitHub.csproj" />
+    <Project Path="src/Setpoint.Cli/Setpoint.Cli.csproj" />
+    <Project Path="src/Setpoint.Core/Setpoint.Core.csproj" />
+  </Folder>
+  <Folder Name="/tests/">
+    <Project Path="tests/Setpoint.ArchitectureTests/Setpoint.ArchitectureTests.csproj" />
+    <Project Path="tests/Setpoint.Cli.Tests/Setpoint.Cli.Tests.csproj" />
+    <Project Path="tests/Setpoint.Core.Tests/Setpoint.Core.Tests.csproj" />
+  </Folder>
+</Solution>
