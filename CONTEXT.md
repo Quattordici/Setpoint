@@ -60,6 +60,10 @@ _Avoid_: Organization defaults, org policy, global config
 A named layer whose rules apply to the repos its selectors match.
 _Avoid_: Team, project (for this concept), cluster
 
+**Adapter**:
+The part of Setpoint that translates between the normalised model and one platform's API (GitHub or Azure DevOps).
+_Avoid_: Provider (as a noun for this), driver, connector, plugin
+
 **Target**:
 A named platform endpoint the policy governs, such as github.com or one Azure DevOps collection.
 _Avoid_: Provider (that is the adapter), instance, connection, platform (for one endpoint)
