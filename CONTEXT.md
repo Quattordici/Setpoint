@@ -24,6 +24,20 @@ _Avoid_: Setting, check, policy (for a single item)
 A baseline rule that groups and repo overrides may not change.
 _Avoid_: Enforced rule, mandatory rule
 
+## Plan and apply
+
+**Plan file**:
+A saved plan: the change set plus the fingerprints, policy hash and Setpoint version it was made against.
+_Avoid_: Plan output (that is what is printed), state file
+
+**Fingerprint**:
+A hash of a normalised live object, recorded at plan time to detect later changes.
+_Avoid_: Checksum, ETag, revision
+
+**Stale plan**:
+A plan file whose fingerprints, policy hash or Setpoint version no longer match; `apply` refuses it.
+_Avoid_: Expired plan, outdated plan
+
 ## Layers
 
 **Layer**:
