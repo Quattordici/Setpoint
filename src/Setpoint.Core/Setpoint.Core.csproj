@@ -2,4 +2,7 @@
   <PropertyGroup>
     <Description>The platform-neutral core of Setpoint: policy model, layer merge, diff, plan and fingerprints.</Description>
   </PropertyGroup>
+  <ItemGroup>
+    <PackageReference Include="YamlDotNet" />
+  </ItemGroup>
 </Project>

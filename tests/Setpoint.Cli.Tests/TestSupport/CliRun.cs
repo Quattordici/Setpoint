@@ -1,3 +1,4 @@
+using Setpoint.Cli.Composition;
 using Setpoint.Core;
 using Spectre.Console.Testing;
 
@@ -26,11 +27,14 @@ internal sealed class CliRun
     /// <summary>Everything written to standard error, rich and plain.</summary>
     public string Error => _errorWriter.ToString() + _error.Output;
 
-    public static async Task<CliRun> InvokeAsync(params string[] args)
+    public static Task<CliRun> InvokeAsync(params string[] args) => InvokeAsync(CliServices.Default, args);
+
+    /// <summary>Runs the CLI with the given services, such as fake adapters.</summary>
+    public static async Task<CliRun> InvokeAsync(CliServices services, params string[] args)
     {
         var run = new CliRun();
         var console = new CliConsole(run._out, run._error, run._outWriter, run._errorWriter);
-        run.ExitCode = await SetpointCli.RunAsync(args, console, TestContext.Current.CancellationToken);
+        run.ExitCode = await SetpointCli.RunAsync(args, console, services, TestContext.Current.CancellationToken);
         return run;
     }
 }

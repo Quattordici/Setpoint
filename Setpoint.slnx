@@ -4,10 +4,14 @@
     <Project Path="src/Setpoint.Adapters.GitHub/Setpoint.Adapters.GitHub.csproj" />
     <Project Path="src/Setpoint.Cli/Setpoint.Cli.csproj" />
     <Project Path="src/Setpoint.Core/Setpoint.Core.csproj" />
+    <Project Path="src/Setpoint.Http/Setpoint.Http.csproj" />
   </Folder>
   <Folder Name="/tests/">
+    <Project Path="tests/Setpoint.Adapters.AzureDevOps.Tests/Setpoint.Adapters.AzureDevOps.Tests.csproj" />
+    <Project Path="tests/Setpoint.Adapters.GitHub.Tests/Setpoint.Adapters.GitHub.Tests.csproj" />
     <Project Path="tests/Setpoint.ArchitectureTests/Setpoint.ArchitectureTests.csproj" />
     <Project Path="tests/Setpoint.Cli.Tests/Setpoint.Cli.Tests.csproj" />
     <Project Path="tests/Setpoint.Core.Tests/Setpoint.Core.Tests.csproj" />
+    <Project Path="tests/Setpoint.Http.Tests/Setpoint.Http.Tests.csproj" />
   </Folder>
 </Solution>

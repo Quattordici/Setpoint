@@ -1,0 +1,14 @@
+# yaml-language-server: $schema=https://raw.githubusercontent.com/Quattordici/Setpoint/main/schema/v1/targets.json
+version: 1
+
+targets:
+  ado-onprem:
+    platform: azuredevops
+    url: https://ado.contoso.local/DefaultCollection
+    auth: integrated          # pat | accessToken | integrated (default: pat)
+  ado-cloud:
+    platform: azuredevops
+    url: https://dev.azure.com/contoso
+  github:
+    platform: github
+    scope: [quattordici/*]

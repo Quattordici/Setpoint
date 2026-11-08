@@ -5,4 +5,12 @@
   <ItemGroup>
     <ProjectReference Include="..\..\src\Setpoint.Cli\Setpoint.Cli.csproj" />
   </ItemGroup>
+  <ItemGroup>
+    <!-- The plan engine's in-memory fakes, shared with the core tests. -->
+    <Compile Include="..\Setpoint.Core.Tests\TestSupport\FakeProviderAdapter.cs" Link="TestSupport\FakeProviderAdapter.cs" />
+    <Compile Include="..\Setpoint.Core.Tests\TestSupport\FixedTimeProvider.cs" Link="TestSupport\FixedTimeProvider.cs" />
+  </ItemGroup>
+  <ItemGroup>
+    <None Include="TestData\**\*" CopyToOutputDirectory="PreserveNewest" />
+  </ItemGroup>
 </Project>

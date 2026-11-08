@@ -1,4 +1,5 @@
 using Setpoint.Cli;
+using Setpoint.Cli.Composition;
 
 using var cancellation = new CancellationTokenSource();
 Console.CancelKeyPress += (_, e) =>
@@ -13,4 +14,4 @@ var console = new CliConsole(
     OutWriter: Console.Out,
     ErrorWriter: Console.Error);
 
-return (int)await SetpointCli.RunAsync(args, console, cancellation.Token);
+return (int)await SetpointCli.RunAsync(args, console, CliServices.Default, cancellation.Token);

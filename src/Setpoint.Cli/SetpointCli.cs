@@ -1,6 +1,7 @@
 using System.CommandLine;
 using System.CommandLine.Help;
 using Setpoint.Cli.Commands;
+using Setpoint.Cli.Composition;
 using Setpoint.Core;
 
 namespace Setpoint.Cli;
@@ -16,13 +17,13 @@ internal static class SetpointCli
     /// <see cref="RootCommand"/>, whose name comes from the host executable and would read
     /// "dotnet" or the test runner's name in help.
     /// </summary>
-    public static Command CreateRootCommand(CliConsole console) =>
+    public static Command CreateRootCommand(CliConsole console, CliServices services) =>
         new(CommandName, "Setpoint, repository governance as code for GitHub and Azure DevOps.")
         {
             new HelpOption(),
             new VersionOption(),
             ValidateCommand.Create(console),
-            PlanCommand.Create(console),
+            PlanCommand.Create(console, services),
             ApplyCommand.Create(console),
         };
 
@@ -30,9 +31,9 @@ internal static class SetpointCli
     /// Parses <paramref name="args"/> and runs the matching command. A usage error returns
     /// <see cref="ExitCode.InvalidPolicyOrUsage"/>, so pipelines can tell it from a runtime failure.
     /// </summary>
-    public static async Task<ExitCode> RunAsync(string[] args, CliConsole console, CancellationToken cancellationToken)
+    public static async Task<ExitCode> RunAsync(string[] args, CliConsole console, CliServices services, CancellationToken cancellationToken)
     {
-        Command root = CreateRootCommand(console);
+        Command root = CreateRootCommand(console, services);
         ParseResult parseResult = root.Parse(args);
 
         var invocation = new InvocationConfiguration

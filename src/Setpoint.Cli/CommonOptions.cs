@@ -52,4 +52,14 @@ internal static class CommonOptions
     {
         Description = "Stop the whole run at the first failed write, instead of only that repo.",
     };
+
+    /// <summary>
+    /// Dev-only and hidden from help: save every HTTP exchange, redacted, as WireMock.Net mappings for tests.
+    /// </summary>
+    public static Option<DirectoryInfo?> Record() => new("--record")
+    {
+        Description = "Dev only: save redacted HTTP request/response pairs to this directory as WireMock mappings.",
+        HelpName = "dir",
+        Hidden = true,
+    };
 }

@@ -1,0 +1,23 @@
+# PROTOTYPE - throwaway sample for ticket #17.
+# yaml-language-server: $schema=https://setpoint.dev/schema/v1/layer.json
+version: 1
+layer: baseline
+
+locked: [minimumReviewers, protectFromForcePushAndDelete]   # only allowed in the baseline
+
+rules:
+  minimumReviewers:
+    count: 2
+    resetOnPush: true
+  requireCommentResolution: true
+  allowedMergeTypes: [squash, rebase]
+  protectFromForcePushAndDelete: true
+
+azuredevops:
+  minimumReviewers:
+    creatorVoteCounts: false
+    allowDownvotes: false
+
+github:
+  pullRequest:
+    requireCodeOwnerReview: false
