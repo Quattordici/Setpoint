@@ -5,6 +5,7 @@ using Setpoint.Adapters.GitHub.Api;
 using Setpoint.Adapters.GitHub.Policy;
 using Setpoint.Adapters.GitHub.Rulesets;
 using Setpoint.Core.Diagnostics;
+using Setpoint.Core.Planning;
 using Setpoint.Core.Policy;
 using Setpoint.Core.Policy.Model;
 using Setpoint.Core.Providers;
@@ -210,9 +211,34 @@ public sealed class GitHubAdapter : IProviderAdapter, IDisposable
         return [new DesiredObject(MatchKey, CreateKey, rules, payload, $"{RulesetTitle} (new)")];
     }
 
-    /// <inheritdoc />
-    public Task<ApplyResult> ApplyAsync(RepoRef repo, RepoChangeSet changes, CancellationToken cancellationToken) =>
-        throw new NotSupportedException("Writing to GitHub isn't available in this build of Setpoint yet.");
+    /// <summary>
+    /// Writes the planned setpoint ruleset: the planned payload is sent exactly as it is in the plan, with nothing
+    /// recomputed. Only the setpoint ruleset is ever written; other rulesets, classic branch protection and repo
+    /// settings are never touched. The first failed write stops the repo, and the rest are reported as not attempted.
+    /// </summary>
+    public async Task<ApplyResult> ApplyAsync(RepoRef repo, RepoChangeSet changes, CancellationToken cancellationToken)
+    {
+        Session session = SessionFor(repo.Target);
+        var outcomes = new List<ObjectApplyOutcome>();
+        string? stoppedBy = null;
+        foreach (PlanObject planned in changes.Objects)
+        {
+            if (stoppedBy is not null)
+            {
+                outcomes.Add(new ObjectApplyOutcome(planned.Key, false, $"Not attempted, because writing {stoppedBy} failed."));
+                continue;
+            }
+
+            string? error = await WriteAsync(session.Api, repo, planned, cancellationToken).ConfigureAwait(false);
+            outcomes.Add(new ObjectApplyOutcome(planned.Key, error is null, error));
+            if (error is not null)
+            {
+                stoppedBy = planned.Key;
+            }
+        }
+
+        return new ApplyResult(outcomes);
+    }
 
     /// <inheritdoc />
     public void Dispose()
@@ -223,6 +249,68 @@ public sealed class GitHubAdapter : IProviderAdapter, IDisposable
         }
 
         _sessions.Clear();
+    }
+
+    private static async Task<string?> WriteAsync(GitHubApiClient api, RepoRef repo, PlanObject planned, CancellationToken cancellationToken)
+    {
+        if (planned.MatchKey != MatchKey)
+        {
+            return $"{planned.Key} is not the setpoint ruleset; the GitHub adapter only ever writes that one.";
+        }
+
+        long? id = RulesetId(planned.Key);
+        HttpResponseMessage response;
+        try
+        {
+            response = (planned.Operation, planned.Payload, id) switch
+            {
+                (ObjectOperation.Create, JsonObject payload, _) => await api.CreateRulesetAsync(repo.Owner, repo.Name, payload, cancellationToken).ConfigureAwait(false),
+                (ObjectOperation.Update, JsonObject payload, long existing) => await api.UpdateRulesetAsync(repo.Owner, repo.Name, existing, payload, cancellationToken).ConfigureAwait(false),
+                (ObjectOperation.Delete, _, long existing) => await api.DeleteRulesetAsync(repo.Owner, repo.Name, existing, cancellationToken).ConfigureAwait(false),
+                _ => throw new InvalidOperationException($"The plan's {planned.Operation.ToString().ToLowerInvariant()} of {planned.Key} has no payload or ruleset id to write."),
+            };
+        }
+        catch (Exception ex) when (ex is not OperationCanceledException || !cancellationToken.IsCancellationRequested)
+        {
+            // A connection failure or timeout fails this repo only; the caller carries on with the others.
+            return ex.Message;
+        }
+
+        using (response)
+        {
+            if (response.IsSuccessStatusCode)
+            {
+                return null;
+            }
+
+            string body = await response.Content.ReadAsStringAsync(cancellationToken).ConfigureAwait(false);
+            string message = GitHubMessage(body) ?? response.ReasonPhrase ?? "no message";
+            const string permission = "The token needs Administration: write on the repo (a classic token needs the repo scope), " +
+                "and its account a role that may edit repository rules.";
+            return (int)response.StatusCode switch
+            {
+                403 => $"GitHub refused to write the setpoint ruleset (403: {message}). {permission}",
+                404 when planned.Operation == ObjectOperation.Create => $"GitHub couldn't find the repo to write the setpoint ruleset (404: {message}). {permission}",
+                404 => $"The setpoint ruleset {planned.Key} no longer exists, or the token can't see it (404: {message}). Plan again.",
+                422 => $"GitHub rejected the setpoint ruleset (422: {message}).",
+                int status => $"Writing the setpoint ruleset failed ({status}: {message}).",
+            };
+        }
+    }
+
+    private static long? RulesetId(string key) =>
+        key.StartsWith("gh:ruleset/", StringComparison.Ordinal) && long.TryParse(key["gh:ruleset/".Length..], out long id) ? id : null;
+
+    private static string? GitHubMessage(string body)
+    {
+        try
+        {
+            return JsonNode.Parse(body)?["message"]?.GetValue<string>();
+        }
+        catch (System.Text.Json.JsonException)
+        {
+            return null;
+        }
     }
 
     private static async Task<Diagnostic?> SkipReasonAsync(Session session, Target target, GitHubRepository repo, CancellationToken cancellationToken)

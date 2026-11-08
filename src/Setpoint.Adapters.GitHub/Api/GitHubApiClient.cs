@@ -124,6 +124,18 @@ internal sealed class GitHubApiClient(HttpClient http) : IDisposable
         return rules;
     }
 
+    /// <summary>Creates a repo ruleset from the payload, exactly as given.</summary>
+    public Task<HttpResponseMessage> CreateRulesetAsync(string owner, string name, JsonObject payload, CancellationToken cancellationToken) =>
+        SendAsync(HttpMethod.Post, $"{RepoPath(owner, name)}/rulesets", payload, cancellationToken);
+
+    /// <summary>Replaces a repo ruleset with the payload, exactly as given.</summary>
+    public Task<HttpResponseMessage> UpdateRulesetAsync(string owner, string name, long id, JsonObject payload, CancellationToken cancellationToken) =>
+        SendAsync(HttpMethod.Put, $"{RepoPath(owner, name)}/rulesets/{id}", payload, cancellationToken);
+
+    /// <summary>Deletes a repo ruleset.</summary>
+    public Task<HttpResponseMessage> DeleteRulesetAsync(string owner, string name, long id, CancellationToken cancellationToken) =>
+        SendAsync(HttpMethod.Delete, $"{RepoPath(owner, name)}/rulesets/{id}", null, cancellationToken);
+
     /// <inheritdoc />
     public void Dispose() => http.Dispose();
 
@@ -131,11 +143,19 @@ internal sealed class GitHubApiClient(HttpClient http) : IDisposable
 
     private static string Segment(string value) => Uri.EscapeDataString(value);
 
-    private async Task<HttpResponseMessage> SendAsync(string uri, CancellationToken cancellationToken)
+    private Task<HttpResponseMessage> SendAsync(string uri, CancellationToken cancellationToken) =>
+        SendAsync(HttpMethod.Get, uri, null, cancellationToken);
+
+    private async Task<HttpResponseMessage> SendAsync(HttpMethod method, string uri, JsonObject? body, CancellationToken cancellationToken)
     {
-        using var request = new HttpRequestMessage(HttpMethod.Get, uri);
+        using var request = new HttpRequestMessage(method, uri);
         request.Headers.Accept.ParseAdd("application/vnd.github+json");
         request.Headers.Add("X-GitHub-Api-Version", ApiVersion);
+        if (body is not null)
+        {
+            request.Content = HttpJson.Content(body, GitHubApiJsonContext.Default.JsonObject);
+        }
+
         return await http.SendAsync(request, cancellationToken).ConfigureAwait(false);
     }
 
