@@ -38,8 +38,12 @@ _Avoid_: Organization defaults, org policy, global config
 A named layer whose rules apply to the repos its selectors match.
 _Avoid_: Team, project (for this concept), cluster
 
+**Target**:
+A named platform endpoint the policy governs, such as github.com or one Azure DevOps collection.
+_Avoid_: Provider (that is the adapter), instance, connection, platform (for one endpoint)
+
 **Selector**:
-An explicit repo or a glob over platform-qualified repo paths that puts repos into a group.
+An explicit repo or a glob over target-qualified repo paths (`<target>/...`) that puts repos into a group.
 _Avoid_: Filter, matcher, query
 
 **Repo override**:
