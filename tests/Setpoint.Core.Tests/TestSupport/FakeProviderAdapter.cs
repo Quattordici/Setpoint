@@ -70,18 +70,19 @@ internal sealed class FakeProviderAdapter(Platform platform = Platform.GitHub, I
                 new Dictionary<string, JsonNode?> { [o.Rule] = o.Value?.DeepClone() },
                 $"Fake {o.Rule} #{o.Id}")),
         ];
-        return Task.FromResult(new LiveSnapshot(objects, fake.Unmanaged, fake.Ambiguous, fake.Unknown));
+        return Task.FromResult(new LiveSnapshot(objects, fake.Unmanaged, fake.Ambiguous, fake.Unknown, fake.Warnings));
     }
 
-    public IReadOnlyList<DesiredObject> MapObjects(DesiredState desired, LiveSnapshot live) =>
-    [
+    public IReadOnlyList<DesiredObject> MapObjects(DesiredState desired, LiveSnapshot live) => _repos[desired.Repo].MappingFailure is { } failure
+        ? throw failure
+        : [
         .. desired.Rules.Values.Select(rule => new DesiredObject(
             $"fake:{rule.Key}",
             $"fake:new/{rule.Key}",
             new Dictionary<string, JsonNode?> { [rule.Key] = rule.Value?.DeepClone() },
             rule.Value is null ? null : new JsonObject { ["rule"] = rule.Key, ["value"] = rule.Value.DeepClone() },
             $"Fake {rule.Key}")),
-    ];
+        ];
 
     public Task<ApplyResult> ApplyAsync(RepoRef repo, RepoChangeSet changes, CancellationToken cancellationToken)
     {
@@ -99,6 +100,10 @@ internal sealed class FakeProviderAdapter(Platform platform = Platform.GitHub, I
         public List<AmbiguousMatch> Ambiguous { get; } = [];
 
         public List<string> Unknown { get; } = [];
+
+        public List<RuleWarning> Warnings { get; } = [];
+
+        public PolicyMappingException? MappingFailure { get; set; }
 
         public Diagnostic? ListingSkip { get; set; }
 

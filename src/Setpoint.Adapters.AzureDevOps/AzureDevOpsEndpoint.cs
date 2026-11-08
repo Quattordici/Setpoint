@@ -15,6 +15,23 @@ internal static class AzureDevOpsEndpoint
     public static Uri ApiRoot(Uri url) => url.AbsoluteUri.EndsWith('/') ? url : new Uri(url.AbsoluteUri + "/");
 
     /// <summary>
+    /// Where identities are looked up: the collection itself on Server, and the organization's
+    /// <c>vssps.dev.azure.com</c> host on Services, which serves identities apart from the rest of the API.
+    /// </summary>
+    public static Uri IdentityRoot(Uri url, bool isServices)
+    {
+        if (!isServices)
+        {
+            return ApiRoot(url);
+        }
+
+        string organization = url.Host.EndsWith(".visualstudio.com", StringComparison.OrdinalIgnoreCase)
+            ? url.Host[..url.Host.IndexOf('.', StringComparison.Ordinal)]
+            : url.AbsolutePath.Trim('/').Split('/')[0];
+        return new Uri($"https://vssps.dev.azure.com/{organization}/");
+    }
+
+    /// <summary>
     /// True for Azure DevOps Services. <c>connectionData</c> says so in <c>deploymentType</c>, as a name
     /// (<c>hosted</c>, <c>onPremises</c>) or a flag (1, 2); the URL decides when it says neither.
     /// </summary>

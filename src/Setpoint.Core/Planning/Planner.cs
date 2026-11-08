@@ -221,6 +221,10 @@ public sealed class Planner
             RepoDiff diff = RepoDiffer.Diff(desired, live, adapter.MapObjects(desired, live));
             return Finish(diff.Objects.Count > 0 ? PlanRepoStatus.Changes : PlanRepoStatus.InSync, diff, diff.Diagnostics);
         }
+        catch (PolicyMappingException ex)
+        {
+            return Finish(PlanRepoStatus.Error, null, [Diagnostic.Error(ex.Code, ex.Message)]);
+        }
         catch (Exception ex) when (ex is not OperationCanceledException || !cancellationToken.IsCancellationRequested)
         {
             return Finish(PlanRepoStatus.Error, null, [Diagnostic.Error(DiagnosticCodes.RepoReadFailed, $"Reading the live state failed: {ex.Message}")]);

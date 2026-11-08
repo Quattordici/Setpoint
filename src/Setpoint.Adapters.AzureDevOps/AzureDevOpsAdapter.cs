@@ -3,6 +3,7 @@ using System.Runtime.CompilerServices;
 using System.Text.Json.Nodes;
 using Setpoint.Adapters.AzureDevOps.Api;
 using Setpoint.Adapters.AzureDevOps.Auth;
+using Setpoint.Adapters.AzureDevOps.Policies;
 using Setpoint.Adapters.AzureDevOps.Policy;
 using Setpoint.Core.Diagnostics;
 using Setpoint.Core.Planning;
@@ -18,8 +19,7 @@ namespace Setpoint.Adapters.AzureDevOps;
 /// and which release of Server, from the target itself; nothing about it is declared in targets.yml.
 /// </summary>
 /// <remarks>
-/// This build has the preflight and the repo listing. Reading branch policies and writing them come next, so for
-/// now every listed repo fails its read and nothing is ever written.
+/// This build reads and plans. Writing branch policies comes next, so apply writes nothing yet.
 /// </remarks>
 public sealed class AzureDevOpsAdapter : IProviderAdapter, IDisposable
 {
@@ -27,6 +27,8 @@ public sealed class AzureDevOpsAdapter : IProviderAdapter, IDisposable
     private readonly SecretRedactor _redactor = new();
     private readonly ConcurrentDictionary<string, Session> _sessions = new(StringComparer.Ordinal);
     private readonly ConcurrentDictionary<RepoRef, AdoRepository> _listed = new();
+    private readonly ConcurrentDictionary<RepoRef, RepoContext> _contexts = new();
+    private readonly ConcurrentDictionary<(string Target, string Project), Lazy<Task<ProjectState>>> _projects = new();
 
     /// <summary>Creates the adapter.</summary>
     public AzureDevOpsAdapter(AzureDevOpsAdapterOptions? options = null) => _options = options ?? new AzureDevOpsAdapterOptions();
@@ -45,11 +47,7 @@ public sealed class AzureDevOpsAdapter : IProviderAdapter, IDisposable
     {
         Uri url = target.Definition.Url ?? throw new InvalidOperationException("an Azure DevOps target needs its organization or collection url");
         AuthMethod auth = target.Definition.Auth ?? AuthMethod.Pat;
-        DelegatingHandler signer = auth switch
-        {
-            AuthMethod.Pat => new PatAuthHandler(Secret(TargetCredentials.TokenVariable(target), "token")),
-            _ => throw new NotSupportedException($"auth: {Name(auth)} isn't available on Azure DevOps in this build yet; use pat"),
-        };
+        DelegatingHandler signer = Signer(target, auth);
 
         HttpClient http = TargetHttpClientFactory.Create(
             target.Name,
@@ -60,6 +58,7 @@ public sealed class AzureDevOpsAdapter : IProviderAdapter, IDisposable
             [signer],
             timeProvider: _options.Time);
         var api = new AzureDevOpsApiClient(http);
+        AzureDevOpsApiClient? identities = null;
         try
         {
             JsonObject connection = await api.GetConnectionDataAsync(cancellationToken).ConfigureAwait(false);
@@ -67,7 +66,8 @@ public sealed class AzureDevOpsAdapter : IProviderAdapter, IDisposable
                 ?? throw new InvalidOperationException("Azure DevOps signed Setpoint in anonymously, so it didn't accept the token");
 
             string detected;
-            if (AzureDevOpsEndpoint.IsServices(connection, url))
+            bool services = AzureDevOpsEndpoint.IsServices(connection, url);
+            if (services)
             {
                 detected = "Azure DevOps Services";
             }
@@ -91,17 +91,26 @@ public sealed class AzureDevOpsAdapter : IProviderAdapter, IDisposable
 
             await CheckPolicyTypesAsync(api, cancellationToken).ConfigureAwait(false);
 
+            Uri identityRoot = AzureDevOpsEndpoint.IdentityRoot(url, services);
+            identities = identityRoot == AzureDevOpsEndpoint.ApiRoot(url)
+                ? null
+                : new AzureDevOpsApiClient(TargetHttpClientFactory.Create(target.Name, identityRoot, _options.Http, _options.Logger, _redactor, [Signer(target, auth)], timeProvider: _options.Time))
+                {
+                    ApiVersion = api.ApiVersion,
+                };
+
             if (_sessions.TryRemove(target.Name, out Session? previous))
             {
                 previous.Dispose();
             }
 
-            _sessions[target.Name] = new Session(api);
+            _sessions[target.Name] = new Session(api, identities);
             return new TargetInfo(detected, api.ApiVersion, identity);
         }
         catch
         {
             api.Dispose();
+            identities?.Dispose();
             throw;
         }
     }
@@ -127,15 +136,35 @@ public sealed class AzureDevOpsAdapter : IProviderAdapter, IDisposable
         }
     }
 
-    /// <inheritdoc />
+    /// <summary>Every rule can be managed on a listed repo; repos that can't be were skipped while listing.</summary>
     public Task<RepoCapabilities> GetCapabilitiesAsync(RepoRef repo, CancellationToken cancellationToken) => Task.FromResult(RepoCapabilities.Full);
 
-    /// <inheritdoc />
-    public Task<LiveSnapshot> ReadAsync(RepoRef repo, CancellationToken cancellationToken) =>
-        throw new NotSupportedException("reading Azure DevOps branch policies isn't in this build of Setpoint yet");
+    /// <summary>
+    /// Reads the policy configurations that apply to the repo's default branch, and the Force push entries on it.
+    /// A project's policies, pipelines and Project Valid Users group are read once per run and shared by its repos.
+    /// </summary>
+    public async Task<LiveSnapshot> ReadAsync(RepoRef repo, CancellationToken cancellationToken)
+    {
+        Session session = SessionFor(repo.Target);
+        AdoRepository listed = Listed(repo) ?? throw new InvalidOperationException($"The repo '{repo}' wasn't listed in this run.");
+        ProjectState project = await _projects
+            .GetOrAdd((repo.Target, listed.Project.Id), key => new Lazy<Task<ProjectState>>(() => ReadProjectAsync(session, listed.Project, cancellationToken)))
+            .Value.ConfigureAwait(false);
 
-    /// <inheritdoc />
-    public IReadOnlyList<DesiredObject> MapObjects(DesiredState desired, LiveSnapshot live) => [];
+        var context = new RepoContext(listed, project.Pipelines, project.ValidUsersDescriptor);
+        JsonObject? acl = await session.Api.GetAccessControlListAsync(ForcePushAcl.NamespaceId, context.BranchToken, cancellationToken).ConfigureAwait(false);
+        Dictionary<string, string> names = await IdentityNamesAsync(session, acl, cancellationToken).ConfigureAwait(false);
+
+        _contexts[repo] = context;
+        return LiveReader.Read(context, project.Configurations, acl, d => names.GetValueOrDefault(d) ?? d);
+    }
+
+    /// <summary>Maps the desired state to policy configurations and the Force push entry. It makes no calls.</summary>
+    /// <exception cref="PolicyMappingException">A required check names no pipeline in the project, or more than one (SP0206).</exception>
+    public IReadOnlyList<DesiredObject> MapObjects(DesiredState desired, LiveSnapshot live) =>
+        ObjectMapper.Map(desired, live, _contexts.TryGetValue(desired.Repo, out RepoContext? context)
+            ? context
+            : throw new InvalidOperationException($"The repo '{desired.Repo}' hasn't been read yet."));
 
     /// <summary>Writes nothing: this build can't write Azure DevOps branch policies yet, so every object is refused.</summary>
     public Task<ApplyResult> ApplyAsync(RepoRef repo, RepoChangeSet changes, CancellationToken cancellationToken) =>
@@ -155,6 +184,35 @@ public sealed class AzureDevOpsAdapter : IProviderAdapter, IDisposable
 
     /// <summary>The listed repo, with the ids later calls need, or null when it wasn't listed in this run.</summary>
     internal AdoRepository? Listed(RepoRef repo) => _listed.GetValueOrDefault(repo);
+
+    private static async Task<ProjectState> ReadProjectAsync(Session session, AdoProject project, CancellationToken cancellationToken)
+    {
+        List<JsonObject> configurations = await session.Api.ListPolicyConfigurationsAsync(project.Id, cancellationToken).ConfigureAwait(false);
+        List<AdoBuildDefinition> pipelines = await session.Api.ListBuildDefinitionsAsync(project.Id, cancellationToken).ConfigureAwait(false);
+        List<AdoIdentity>? validUsers = await session.IdentityApi.SearchIdentitiesAsync($"[{project.Name}]\\Project Valid Users", cancellationToken).ConfigureAwait(false);
+        return new ProjectState(configurations, pipelines, validUsers?.FirstOrDefault()?.Descriptor);
+    }
+
+    private static async Task<Dictionary<string, string>> IdentityNamesAsync(Session session, JsonObject? acl, CancellationToken cancellationToken)
+    {
+        var names = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
+        string[] descriptors = acl is null ? [] : [.. ForcePushAcl.Entries(acl).Select(e => e.Descriptor)];
+        foreach (AdoIdentity identity in await session.IdentityApi.GetIdentitiesAsync(descriptors, cancellationToken).ConfigureAwait(false) ?? [])
+        {
+            if (identity.Descriptor is { } descriptor && (identity.CustomDisplayName ?? identity.ProviderDisplayName) is { } name)
+            {
+                names[descriptor] = name;
+            }
+        }
+
+        return names;
+    }
+
+    private DelegatingHandler Signer(Target target, AuthMethod auth) => auth switch
+    {
+        AuthMethod.Pat => new PatAuthHandler(Secret(TargetCredentials.TokenVariable(target), "token")),
+        _ => throw new NotSupportedException($"auth: {Name(auth)} isn't available on Azure DevOps in this build yet; use pat"),
+    };
 
     // The type ids are fixed, but the Status one comes from Microsoft's Terraform provider rather than the REST
     // reference, so the preflight asks the server. Types are listed per project; a collection with no projects
@@ -211,8 +269,17 @@ public sealed class AzureDevOpsAdapter : IProviderAdapter, IDisposable
         return value;
     }
 
-    private sealed record Session(AzureDevOpsApiClient Api) : IDisposable
+    // Identities live on another host on Services; on Server the collection serves them.
+    private sealed record Session(AzureDevOpsApiClient Api, AzureDevOpsApiClient? Identities) : IDisposable
     {
-        public void Dispose() => Api.Dispose();
+        public AzureDevOpsApiClient IdentityApi => Identities ?? Api;
+
+        public void Dispose()
+        {
+            Api.Dispose();
+            Identities?.Dispose();
+        }
     }
+
+    private sealed record ProjectState(IReadOnlyList<JsonObject> Configurations, IReadOnlyList<AdoBuildDefinition> Pipelines, string? ValidUsersDescriptor);
 }

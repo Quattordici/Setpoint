@@ -58,8 +58,86 @@ internal sealed class AzureDevOpsApiClient(HttpClient http) : IDisposable
         return (await ReadAsync(response, AzureDevOpsApiJsonContext.Default.AdoListAdoRepository, cancellationToken).ConfigureAwait(false)).Value;
     }
 
+    /// <summary>
+    /// Every branch policy configuration in a project, as Azure DevOps returns them. The project-wide listing is used
+    /// rather than the per-repo Git one because it is a released resource at 7.0; the adapter works out which ones
+    /// apply to a repo's default branch from their scopes, and reads each project once per run.
+    /// </summary>
+    public Task<List<JsonObject>> ListPolicyConfigurationsAsync(string projectId, CancellationToken cancellationToken) =>
+        PagesAsync($"{Segment(projectId)}/_apis/policy/configurations", AzureDevOpsApiJsonContext.Default.AdoListJsonObject, cancellationToken);
+
+    /// <summary>Every pipeline in a project, for resolving required check names to build definition ids.</summary>
+    public Task<List<AdoBuildDefinition>> ListBuildDefinitionsAsync(string projectId, CancellationToken cancellationToken) =>
+        PagesAsync($"{Segment(projectId)}/_apis/build/definitions", AzureDevOpsApiJsonContext.Default.AdoListAdoBuildDefinition, cancellationToken);
+
+    /// <summary>
+    /// The access control list on one security token, or null when the token may not read security, which needs
+    /// more than a read-only PAT. An empty object means no list is set on the token.
+    /// </summary>
+    public async Task<JsonObject?> GetAccessControlListAsync(string namespaceId, string token, CancellationToken cancellationToken)
+    {
+        string path = Versioned($"_apis/accesscontrollists/{Segment(namespaceId)}?token={Uri.EscapeDataString(token)}&includeExtendedInfo=false&recurse=false");
+        using HttpResponseMessage response = await SendAsync(HttpMethod.Get, path, cancellationToken).ConfigureAwait(false);
+        if (response.StatusCode is HttpStatusCode.Unauthorized or HttpStatusCode.Forbidden)
+        {
+            return null;
+        }
+
+        List<JsonObject> lists = (await ReadAsync(response, AzureDevOpsApiJsonContext.Default.AdoListJsonObject, cancellationToken).ConfigureAwait(false)).Value;
+        return lists.FirstOrDefault(l => string.Equals(l["token"]?.GetValue<string>(), token, StringComparison.OrdinalIgnoreCase)) ?? [];
+    }
+
+    /// <summary>The identities with these descriptors, or null when the token may not read identities.</summary>
+    public async Task<List<AdoIdentity>?> GetIdentitiesAsync(IReadOnlyCollection<string> descriptors, CancellationToken cancellationToken)
+    {
+        if (descriptors.Count == 0)
+        {
+            return [];
+        }
+
+        string path = Versioned($"_apis/identities?descriptors={Uri.EscapeDataString(string.Join(',', descriptors))}&queryMembership=None");
+        return await IdentitiesAsync(path, cancellationToken).ConfigureAwait(false);
+    }
+
+    /// <summary>The identities a general search finds, such as <c>[Payments]\Project Valid Users</c>, or null when the token may not read identities.</summary>
+    public Task<List<AdoIdentity>?> SearchIdentitiesAsync(string filterValue, CancellationToken cancellationToken) =>
+        IdentitiesAsync(Versioned($"_apis/identities?searchFilter=General&filterValue={Uri.EscapeDataString(filterValue)}&queryMembership=None"), cancellationToken);
+
     /// <inheritdoc />
     public void Dispose() => http.Dispose();
+
+    /// <summary>The header Azure DevOps sends when a listing has another page.</summary>
+    internal const string ContinuationHeader = "x-ms-continuationtoken";
+
+    private async Task<List<AdoIdentity>?> IdentitiesAsync(string path, CancellationToken cancellationToken)
+    {
+        using HttpResponseMessage response = await SendAsync(HttpMethod.Get, path, cancellationToken).ConfigureAwait(false);
+        if (response.StatusCode is HttpStatusCode.Unauthorized or HttpStatusCode.Forbidden)
+        {
+            return null;
+        }
+
+        return (await ReadAsync(response, AzureDevOpsApiJsonContext.Default.AdoListAdoIdentity, cancellationToken).ConfigureAwait(false)).Value;
+    }
+
+    // Follows x-ms-continuationtoken until the listing has no more pages.
+    private async Task<List<T>> PagesAsync<T>(string path, JsonTypeInfo<AdoList<T>> typeInfo, CancellationToken cancellationToken)
+    {
+        var items = new List<T>();
+        string? continuation = null;
+        do
+        {
+            string page = continuation is null ? path : $"{path}?continuationToken={Uri.EscapeDataString(continuation)}";
+            using HttpResponseMessage response = await SendAsync(HttpMethod.Get, Versioned(page), cancellationToken).ConfigureAwait(false);
+            items.AddRange((await ReadAsync(response, typeInfo, cancellationToken).ConfigureAwait(false)).Value);
+            continuation = response.Headers.TryGetValues(ContinuationHeader, out IEnumerable<string>? values)
+                ? values.FirstOrDefault(v => v.Length > 0)
+                : null;
+        }
+        while (continuation is not null);
+
+        return items;
+    }
 
     /// <summary>A project or repo name as one path segment.</summary>
     internal static string Segment(string value) => Uri.EscapeDataString(value);

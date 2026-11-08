@@ -89,6 +89,9 @@ public static class DiagnosticCodes
     /// <summary>A GitHub fork in scope on a target without <c>includeForks: true</c>. It is skipped.</summary>
     public const string ForkSkipped = "SP0205";
 
+    /// <summary>A required check names a pipeline that doesn't exist in the repo's Azure DevOps project.</summary>
+    public const string PipelineNotFound = "SP0206";
+
     // 10xx: reaching targets and reading repos.
 
     /// <summary>A target can't be reached or refused the preflight, so none of its repos are planned.</summary>
@@ -104,6 +107,9 @@ public static class DiagnosticCodes
 
     /// <summary>Unmanaged merge settings and the policy together leave no merge method, so pull requests can't complete.</summary>
     public const string NoMergeMethodLeft = "SP2102";
+
+    /// <summary>An explicit Allow for Force push on the default branch, such as its creator's, outranks the deny Setpoint manages.</summary>
+    public const string ForcePushAllowed = "SP2103";
 
     // 22xx: matching live objects.
 
