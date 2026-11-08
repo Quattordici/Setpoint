@@ -94,7 +94,7 @@ public sealed class PlanFileTests
         SetpointVersion = "0.1.0-alpha",
         CreatedAt = new DateTimeOffset(2026, 11, 8, 12, 0, 0, TimeSpan.Zero),
         Policy = new PlanPolicy("sha256:abc", 5, "3f9c2a1"),
-        Options = new PlanOptionsRecord(false, false, false),
+        Options = new PlanOptionsRecord(false, false, false, 25),
         Targets = [new PlanTarget("ado-cloud", Platform.AzureDevOps, "Azure DevOps Services", "7.0", AuthMethod.AccessToken, "build-service", 3)],
         Repos =
         [

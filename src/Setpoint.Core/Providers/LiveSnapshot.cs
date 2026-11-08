@@ -29,7 +29,8 @@ public sealed record LiveSnapshot(
 /// </param>
 /// <param name="Native">The object as the platform returned it, minus fields that change on every read. The fingerprint is taken over it.</param>
 /// <param name="Rules">The rule values the object carries, keyed by rule (<c>minimumReviewers</c>, <c>github.pullRequest</c>).</param>
-public sealed record LiveObject(string Key, string MatchKey, JsonNode Native, IReadOnlyDictionary<string, JsonNode?> Rules);
+/// <param name="Title">What the object is, for people: <c>Minimum number of reviewers #17</c>, <c>ruleset setpoint</c>.</param>
+public sealed record LiveObject(string Key, string MatchKey, JsonNode Native, IReadOnlyDictionary<string, JsonNode?> Rules, string? Title = null);
 
 /// <summary>A live setting Setpoint doesn't own.</summary>
 /// <param name="Rule">The neutral or provider rule it bears on, such as <c>minimumReviewers</c>.</param>

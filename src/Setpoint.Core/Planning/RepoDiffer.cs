@@ -82,7 +82,13 @@ public static class RepoDiffer
             }
 
             string fingerprint = current is null ? Fingerprint.NothingMatches(wanted.MatchKey) : Fingerprint.Of(current.Native);
-            objects.Add(new PlanObject(key, op, fingerprint, wanted.MatchKey, op == ObjectOperation.Delete ? null : wanted.Payload?.DeepClone()));
+            objects.Add(new PlanObject(
+                key,
+                op,
+                fingerprint,
+                wanted.MatchKey,
+                op == ObjectOperation.Delete ? null : wanted.Payload?.DeepClone(),
+                current?.Title ?? wanted.Title));
             changes.AddRange(objectChanges);
         }
 
