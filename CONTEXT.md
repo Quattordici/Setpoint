@@ -20,6 +20,32 @@ _Avoid_: Config repo, governance repo, admin repo
 One declared requirement inside a policy, such as a minimum number of reviewers.
 _Avoid_: Setting, check, policy (for a single item)
 
+**Locked rule**:
+A baseline rule that groups and repo overrides may not change.
+_Avoid_: Enforced rule, mandatory rule
+
+## Layers
+
+**Layer**:
+One level of policy that contributes rules to a repo: the baseline, a group, or a repo override.
+_Avoid_: Tier, scope, level
+
+**Baseline**:
+The top layer, applying to every repo the policy repo governs on every platform.
+_Avoid_: Organization defaults, org policy, global config
+
+**Group**:
+A named layer whose rules apply to the repos its selectors match.
+_Avoid_: Team, project (for this concept), cluster
+
+**Selector**:
+An explicit repo or a glob over platform-qualified repo paths that puts repos into a group.
+_Avoid_: Filter, matcher, query
+
+**Repo override**:
+The bottom layer: rules declared for one specific repo.
+_Avoid_: Repo config, local policy
+
 **Live state**:
 What a platform currently has configured for a repository.
 _Avoid_: Actual state, current config, reality
