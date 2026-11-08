@@ -12,7 +12,7 @@ using Setpoint.Core.Providers;
 namespace Setpoint.Core.Policy.Schema;
 
 /// <summary>
-/// Generates the JSON Schemas for policy files from the same serialization contract the loader uses,
+/// Generates the JSON Schemas for policy files and plan files from the same serialization contract the loader uses,
 /// so the schema can't drift from what Setpoint accepts. Editors use them through
 /// <c># yaml-language-server: $schema=...</c> at the top of a policy file.
 /// </summary>
@@ -23,6 +23,7 @@ public static class PolicySchemaGenerator
 
     public const string TargetsSchemaFileName = "targets.json";
     public const string LayerSchemaFileName = "layer.json";
+    public const string PlanSchemaFileName = "plan.json";
 
     private const string Draft = "https://json-schema.org/draft/2020-12/schema";
 
@@ -46,6 +47,13 @@ public static class PolicySchemaGenerator
         }
 
         return Finish(schema, LayerSchemaFileName, "Setpoint policy layer", "A Setpoint layer file: baseline.yml, groups/<name>.yml or repos/<target>/<project-or-owner>/<repo>.yml.");
+    }
+
+    /// <summary>The schema for plan files, which <c>plan --out</c> writes and <c>plan --json</c> prints.</summary>
+    public static JsonObject PlanSchema()
+    {
+        JsonObject schema = Generate(Planning.PlanJsonContext.Default.PlanDocument);
+        return Finish(schema, PlanSchemaFileName, "Setpoint plan", "A Setpoint plan: the native objects apply will write, their plan-time fingerprints, and the neutral changes for people.");
     }
 
     /// <summary>Writes a schema the way the committed files are written: indented, with readable characters.</summary>
