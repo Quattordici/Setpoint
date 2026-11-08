@@ -106,6 +106,8 @@ public sealed class PolicyValidator(IReadOnlyList<IProviderBlockDefinition> prov
                 "auth: app is for GitHub. Azure DevOps targets use pat, accessToken, integrated or entra.",
             (Platform.AzureDevOps, AuthMethod.Entra) when target.Url is { } url && !IsAzureDevOpsServices(url) =>
                 $"auth: entra works on Azure DevOps Services only, and '{url}' is an Azure DevOps Server. Use pat, accessToken or integrated.",
+            (Platform.AzureDevOps, AuthMethod.Integrated) when target.Url is { } url && IsAzureDevOpsServices(url) =>
+                $"auth: integrated (Windows auth) works on Azure DevOps Server only, and '{url}' is Azure DevOps Services. Use pat, accessToken or entra.",
             _ => null,
         };
 

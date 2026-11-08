@@ -46,18 +46,18 @@ public sealed class AzureDevOpsAdapter : IProviderAdapter, IDisposable
     public async Task<TargetInfo> DescribeAsync(Target target, CancellationToken cancellationToken)
     {
         Uri url = target.Definition.Url ?? throw new InvalidOperationException("an Azure DevOps target needs its organization or collection url");
-        AuthMethod auth = target.Definition.Auth ?? AuthMethod.Pat;
-        DelegatingHandler signer = Signer(target, auth);
-
-        HttpClient http = TargetHttpClientFactory.Create(
+        SignIn signIn = SignInFor(target, url);
+        HttpClient Client(Uri root) => TargetHttpClientFactory.Create(
             target.Name,
-            AzureDevOpsEndpoint.ApiRoot(url),
+            root,
             _options.Http,
             _options.Logger,
             _redactor,
-            [signer],
-            timeProvider: _options.Time);
-        var api = new AzureDevOpsApiClient(http);
+            signIn.Handlers(),
+            signIn.PrimaryHandler(),
+            _options.Time);
+
+        var api = new AzureDevOpsApiClient(Client(AzureDevOpsEndpoint.ApiRoot(url)));
         AzureDevOpsApiClient? identities = null;
         try
         {
@@ -94,7 +94,7 @@ public sealed class AzureDevOpsAdapter : IProviderAdapter, IDisposable
             Uri identityRoot = AzureDevOpsEndpoint.IdentityRoot(url, services);
             identities = identityRoot == AzureDevOpsEndpoint.ApiRoot(url)
                 ? null
-                : new AzureDevOpsApiClient(TargetHttpClientFactory.Create(target.Name, identityRoot, _options.Http, _options.Logger, _redactor, [Signer(target, auth)], timeProvider: _options.Time))
+                : new AzureDevOpsApiClient(Client(identityRoot))
                 {
                     ApiVersion = api.ApiVersion,
                 };
@@ -104,13 +104,14 @@ public sealed class AzureDevOpsAdapter : IProviderAdapter, IDisposable
                 previous.Dispose();
             }
 
-            _sessions[target.Name] = new Session(api, identities);
+            _sessions[target.Name] = new Session(api, identities, signIn.Owned);
             return new TargetInfo(detected, api.ApiVersion, identity);
         }
         catch
         {
             api.Dispose();
             identities?.Dispose();
+            signIn.Owned?.Dispose();
             throw;
         }
     }
@@ -208,11 +209,64 @@ public sealed class AzureDevOpsAdapter : IProviderAdapter, IDisposable
         return names;
     }
 
-    private DelegatingHandler Signer(Target target, AuthMethod auth) => auth switch
+    // How requests to the target are signed. Each client gets its own handlers; a token source they share is
+    // owned by the session. Services or Server is decided from the URL here, as validate decides it, because the
+    // sign-in has to exist before the connection data that says so for certain.
+    private SignIn SignInFor(Target target, Uri url)
     {
-        AuthMethod.Pat => new PatAuthHandler(Secret(TargetCredentials.TokenVariable(target), "token")),
-        _ => throw new NotSupportedException($"auth: {Name(auth)} isn't available on Azure DevOps in this build yet; use pat"),
+        AuthMethod auth = target.Definition.Auth ?? AuthMethod.Pat;
+        bool services = AzureDevOpsEndpoint.IsServices([], url);
+        switch (auth)
+        {
+            case AuthMethod.Pat:
+                string pat = Secret(TargetCredentials.TokenVariable(target), "token");
+                return new SignIn(() => [new PatAuthHandler(pat)]);
+
+            case AuthMethod.AccessToken:
+                string jobToken = Secret(
+                    TargetCredentials.AccessTokenVariable,
+                    "pipeline job token (map it in the pipeline step with env: SYSTEM_ACCESSTOKEN: $(System.AccessToken))");
+                return new SignIn(() => [new BearerAuthHandler(_ => ValueTask.FromResult(jobToken))]);
+
+            case AuthMethod.Integrated when services:
+                throw new NotSupportedException("auth: integrated (Windows auth) works on Azure DevOps Server only; use pat, accessToken or entra");
+
+            case AuthMethod.Integrated:
+                return new SignIn(() => [], _options.CreateIntegratedHandler ?? WindowsAuthHandler);
+
+            case AuthMethod.Entra when !services:
+                throw new NotSupportedException("auth: entra works on Azure DevOps Services only; use pat, accessToken or integrated");
+
+            case AuthMethod.Entra:
+                var source = new EntraTokenSource(
+                    _options.CreateEntraCredential?.Invoke() ?? EntraTokenSource.Default(_options.GetEnvironmentVariable),
+                    _options.Time,
+                    _redactor.Add);
+                return new SignIn(() => [new BearerAuthHandler(source.GetAsync)], Owned: source);
+
+            default:
+                throw new NotSupportedException($"auth: {Name(auth)} isn't available on Azure DevOps; use pat, accessToken, integrated or entra");
+        }
+    }
+
+    // Windows auth: the default handler, answering the server's Negotiate or NTLM challenge as the account Setpoint
+    // runs as. No credential is read from anywhere, and none is logged.
+    private static HttpMessageHandler WindowsAuthHandler() => new SocketsHttpHandler
+    {
+        Credentials = System.Net.CredentialCache.DefaultNetworkCredentials,
+        PreAuthenticate = true,
+        PooledConnectionLifetime = TimeSpan.FromMinutes(5),
+        AutomaticDecompression = System.Net.DecompressionMethods.All,
     };
+
+    /// <summary>How one target's requests are signed.</summary>
+    /// <param name="Handlers">Creates the signing handlers for one client.</param>
+    /// <param name="Primary">Creates the innermost handler, or null for the platform default.</param>
+    /// <param name="Owned">What the session disposes, such as a token source its clients share.</param>
+    private sealed record SignIn(Func<DelegatingHandler[]> Handlers, Func<HttpMessageHandler>? Primary = null, IDisposable? Owned = null)
+    {
+        public HttpMessageHandler? PrimaryHandler() => Primary?.Invoke();
+    }
 
     // The type ids are fixed, but the Status one comes from Microsoft's Terraform provider rather than the REST
     // reference, so the preflight asks the server. Types are listed per project; a collection with no projects
@@ -270,7 +324,7 @@ public sealed class AzureDevOpsAdapter : IProviderAdapter, IDisposable
     }
 
     // Identities live on another host on Services; on Server the collection serves them.
-    private sealed record Session(AzureDevOpsApiClient Api, AzureDevOpsApiClient? Identities) : IDisposable
+    private sealed record Session(AzureDevOpsApiClient Api, AzureDevOpsApiClient? Identities, IDisposable? Credentials) : IDisposable
     {
         public AzureDevOpsApiClient IdentityApi => Identities ?? Api;
 
@@ -278,6 +332,7 @@ public sealed class AzureDevOpsAdapter : IProviderAdapter, IDisposable
         {
             Api.Dispose();
             Identities?.Dispose();
+            Credentials?.Dispose();
         }
     }
 

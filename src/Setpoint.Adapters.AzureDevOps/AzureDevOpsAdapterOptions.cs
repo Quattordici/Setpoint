@@ -20,6 +20,18 @@ public sealed record AzureDevOpsAdapterOptions
     public TimeProvider Time { get; init; } = TimeProvider.System;
 
     /// <summary>
+    /// Creates the Entra ID credential for <c>auth: entra</c>. By default workload identity federation, managed
+    /// identity, then the Azure CLI login; tests pass their own.
+    /// </summary>
+    public Func<Azure.Core.TokenCredential>? CreateEntraCredential { get; init; }
+
+    /// <summary>
+    /// The innermost handler for <c>auth: integrated</c> targets. By default one that signs in with the Windows
+    /// account Setpoint runs as; tests pass their own.
+    /// </summary>
+    public Func<HttpMessageHandler>? CreateIntegratedHandler { get; init; }
+
+    /// <summary>
     /// <c>--allow-unsupported-server</c>: accept Azure DevOps Server releases older than 2022, using the newest REST
     /// version they have instead of the pinned 7.0.
     /// </summary>

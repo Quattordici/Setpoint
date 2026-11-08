@@ -17,6 +17,12 @@ internal sealed class AzureDevOpsApiStub(WireMockServer server, string token)
 
     private readonly string _basic = "Basic " + Convert.ToBase64String(Encoding.UTF8.GetBytes(":" + token));
 
+    /// <summary>The header every signed stub requires: Basic auth with the PAT by default.</summary>
+    public (string Name, string Value)? RequiredHeader { get; set; }
+
+    /// <summary>A stub whose calls must carry <paramref name="token"/> as a bearer token, as the job token and Entra ID do.</summary>
+    public static AzureDevOpsApiStub Bearer(WireMockServer server, string token) => new(server, token) { RequiredHeader = ("Authorization", $"Bearer {token}") };
+
     /// <summary>The api-version the REST stubs require. An allowed older server is stubbed with its own.</summary>
     public string ApiVersion { get; set; } = "7.0";
 
@@ -165,7 +171,9 @@ internal sealed class AzureDevOpsApiStub(WireMockServer server, string token)
         ["isActive"] = true,
     };
 
-    private IRequestBuilder Signed(string path) => Request.Create().WithPath(Collection + path).WithHeader("Authorization", _basic);
+    private IRequestBuilder Signed(string path) => RequiredHeader is { } header
+        ? Request.Create().WithPath(Collection + path).WithHeader(header.Name, header.Value)
+        : Request.Create().WithPath(Collection + path).WithHeader("Authorization", _basic);
 
     private IRequestBuilder Versioned(string path) => Signed(path).UsingGet().WithParam("api-version", ApiVersion);
 

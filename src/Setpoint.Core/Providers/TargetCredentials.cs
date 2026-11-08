@@ -11,6 +11,9 @@ public static class TargetCredentials
     /// <summary>The variable holding the target's token: its <c>tokenEnv:</c>, or <c>SETPOINT_&lt;TARGET&gt;_TOKEN</c>.</summary>
     public static string TokenVariable(Target target) => target.Definition.TokenEnv ?? $"SETPOINT_{EnvironmentName(target.Name)}_TOKEN";
 
+    /// <summary>The variable Azure Pipelines puts the job's access token in, for <c>auth: accessToken</c>.</summary>
+    public const string AccessTokenVariable = "SYSTEM_ACCESSTOKEN";
+
     /// <summary>The variable holding a GitHub App's private key: <c>SETPOINT_&lt;TARGET&gt;_APP_KEY</c>.</summary>
     public static string AppKeyVariable(Target target) => $"SETPOINT_{EnvironmentName(target.Name)}_APP_KEY";
 
