@@ -1,0 +1,5 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <ItemGroup>
+    <ProjectReference Include="..\..\src\Setpoint.Adapters.AzureDevOps\Setpoint.Adapters.AzureDevOps.csproj" />
+  </ItemGroup>
+</Project>

@@ -15,6 +15,18 @@ Declare pull-request rules once in YAML, in a central policy repo, and Setpoint 
 | `setpoint apply plan.json` | Applies a saved plan, after checking nothing moved since it was made |
 | `setpoint apply --yes` | Re-plans and applies in one step |
 
+## Editor support
+
+JSON Schemas for policy files are published under [`schema/v1/`](schema/v1/). Add a modeline as the first line of a policy file and VS Code (with the YAML extension) or Rider will check it as you type:
+
+```yaml
+# yaml-language-server: $schema=https://raw.githubusercontent.com/Quattordici/Setpoint/main/schema/v1/layer.json
+version: 1
+layer: baseline
+```
+
+Use `targets.json` for `targets.yml` and `layer.json` for every other policy file. The schemas are generated from the C# model; if you change the model, regenerate them with `SETPOINT_UPDATE_SCHEMA=1 dotnet test --solution Setpoint.slnx`.
+
 ## Building
 
 You need the .NET 10 SDK.

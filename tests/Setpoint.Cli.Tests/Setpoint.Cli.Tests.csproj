@@ -5,4 +5,7 @@
   <ItemGroup>
     <ProjectReference Include="..\..\src\Setpoint.Cli\Setpoint.Cli.csproj" />
   </ItemGroup>
+  <ItemGroup>
+    <None Include="TestData\**\*" CopyToOutputDirectory="PreserveNewest" />
+  </ItemGroup>
 </Project>
