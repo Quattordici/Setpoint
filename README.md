@@ -16,6 +16,7 @@ Declare pull-request rules once in YAML, in a central policy repo, and Setpoint 
 | [Diagnostics and exit codes](docs/diagnostics.md) | Every `SPxxxx` code and exit code, and what to do about it |
 | [GitHub](docs/github.md), [Azure DevOps](docs/azure-devops.md) | How each platform is mapped, listed and written |
 | [Plan files](docs/plan-file.md) | The `plan.json` format |
+| [Live gates](docs/live-gates.md) | For contributors: the test environments, the gate script and recording fixtures |
 
 ## Commands
 
