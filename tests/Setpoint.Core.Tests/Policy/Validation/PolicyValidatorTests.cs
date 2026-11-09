@@ -200,6 +200,7 @@ public sealed class PolicyValidatorTests
     /// </summary>
     [Theory(DisplayName = "👎 Rejects auth methods the platform doesn't support")]
     [InlineData("azuredevops", "https://ado.contoso.local/DefaultCollection", "entra")]
+    [InlineData("azuredevops", "https://dev.azure.com/acme", "integrated")]
     [InlineData("azuredevops", "https://dev.azure.com/acme", "app\n    appId: 1")]
     [InlineData("github", null, "integrated")]
     [InlineData("github", null, "accessToken")]

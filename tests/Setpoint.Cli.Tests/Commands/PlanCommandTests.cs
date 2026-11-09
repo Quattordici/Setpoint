@@ -61,18 +61,43 @@ public sealed class PlanCommandTests : IDisposable
     }
 
     /// <summary>
+    /// Given --allow-unsupported-server,
+    /// when plan runs,
+    /// then the adapters it creates are told to accept older Azure DevOps Server releases.
+    /// </summary>
+    [Fact(DisplayName = "🖐️ plan --allow-unsupported-server passes the flag to the adapters")]
+    public async Task Plan_AllowUnsupportedServer_PassesFlagToAdapters()
+    {
+        // Arrange
+        AdapterSettings? settings = null;
+        var services = new CliServices(
+            given =>
+            {
+                settings = given;
+                return [_github, _azureDevOps];
+            },
+            TimeProvider.System);
+
+        // Act
+        await CliRun.InvokeAsync(services, "plan", "-p", s_policy, "--allow-unsupported-server");
+
+        // Assert
+        settings.ShouldNotBeNull().AllowUnsupportedServer.ShouldBeTrue();
+    }
+
+    /// <summary>
     /// Given the production services,
     /// when they create a run's adapters,
-    /// then the GitHub adapter is among them.
+    /// then there is one for GitHub and one for Azure DevOps.
     /// </summary>
-    [Fact(DisplayName = "👍 The production services include the GitHub adapter")]
-    public void Default_CreateAdapters_IncludesGitHub()
+    [Fact(DisplayName = "👍 The production services include the GitHub and Azure DevOps adapters")]
+    public void Default_CreateAdapters_IncludesBothPlatforms()
     {
         // Act
         IReadOnlyList<Setpoint.Core.Providers.IProviderAdapter> adapters = CliServices.Default.CreateAdapters(new AdapterSettings(new Setpoint.Http.HttpCoreOptions()));
 
         // Assert
-        adapters.ShouldContain(a => a is Setpoint.Adapters.GitHub.GitHubAdapter);
+        adapters.Select(a => a.GetType()).ShouldBe([typeof(Setpoint.Adapters.GitHub.GitHubAdapter), typeof(Setpoint.Adapters.AzureDevOps.AzureDevOpsAdapter)]);
         foreach (IDisposable adapter in adapters.OfType<IDisposable>())
         {
             adapter.Dispose();

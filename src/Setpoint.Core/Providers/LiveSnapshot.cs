@@ -11,11 +11,13 @@ namespace Setpoint.Core.Providers;
 /// <param name="Unmanaged">Settings outside Setpoint's ownership, such as another ruleset or classic branch protection.</param>
 /// <param name="Ambiguous">Rules more than one live object matches. Setpoint leaves them alone and warns (SP2201).</param>
 /// <param name="UnknownRules">Rules whose live value the token can't see. Plan reports them as unknown (SP2202), not as changes.</param>
+/// <param name="Warnings">Warnings about live settings that undercut a rule, reported only when the policy sets that rule.</param>
 public sealed record LiveSnapshot(
     IReadOnlyList<LiveObject> Objects,
     IReadOnlyList<UnmanagedSetting> Unmanaged,
     IReadOnlyList<AmbiguousMatch> Ambiguous,
-    IReadOnlyList<string> UnknownRules)
+    IReadOnlyList<string> UnknownRules,
+    IReadOnlyList<RuleWarning>? Warnings = null)
 {
     /// <summary>A repo with nothing on it.</summary>
     public static readonly LiveSnapshot Empty = new([], [], [], []);
@@ -43,3 +45,8 @@ public sealed record UnmanagedSetting(string Rule, string Source, JsonNode? Valu
 /// <param name="ObjectKeys">The matching objects.</param>
 /// <param name="Detail">What matched, for people: <c>type + branch main</c>.</param>
 public sealed record AmbiguousMatch(string Rule, IReadOnlyList<string> ObjectKeys, string Detail);
+
+/// <summary>A warning about a live setting that undercuts a rule, such as an explicit Allow that outranks a deny.</summary>
+/// <param name="Rule">The rule it undercuts. The warning is only reported when the policy sets the rule.</param>
+/// <param name="Diagnostic">The warning.</param>
+public sealed record RuleWarning(string Rule, Diagnostics.Diagnostic Diagnostic);

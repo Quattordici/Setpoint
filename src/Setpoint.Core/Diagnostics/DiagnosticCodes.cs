@@ -89,6 +89,9 @@ public static class DiagnosticCodes
     /// <summary>A GitHub fork in scope on a target without <c>includeForks: true</c>. It is skipped.</summary>
     public const string ForkSkipped = "SP0205";
 
+    /// <summary>A required check names a pipeline that doesn't exist in the repo's Azure DevOps project.</summary>
+    public const string PipelineNotFound = "SP0206";
+
     // 10xx: reaching targets and reading repos.
 
     /// <summary>A target can't be reached or refused the preflight, so none of its repos are planned.</summary>
@@ -97,6 +100,9 @@ public static class DiagnosticCodes
     /// <summary>Reading one repo's live state failed. The other repos are still planned.</summary>
     public const string RepoReadFailed = "SP1002";
 
+    /// <summary>Writing one repo's changes failed. That repo stops; the others carry on unless <c>--fail-fast</c>.</summary>
+    public const string WriteFailed = "SP1003";
+
     // 21xx: ownership.
 
     /// <summary>An unmanaged setting is stricter than the policy, so the effective result differs from the declared one.</summary>
@@ -104,6 +110,9 @@ public static class DiagnosticCodes
 
     /// <summary>Unmanaged merge settings and the policy together leave no merge method, so pull requests can't complete.</summary>
     public const string NoMergeMethodLeft = "SP2102";
+
+    /// <summary>An explicit Allow for Force push on the default branch, such as its creator's, outranks the deny Setpoint manages.</summary>
+    public const string ForcePushAllowed = "SP2103";
 
     // 22xx: matching live objects.
 
@@ -117,4 +126,12 @@ public static class DiagnosticCodes
 
     /// <summary>A private repo on GitHub Free, where rulesets don't apply. It is skipped.</summary>
     public const string PrivateRepoOnGitHubFree = "SP3001";
+
+    // 40xx: apply guards.
+
+    /// <summary>The plan no longer matches live state, the policy or the Setpoint version, so apply writes nothing (exit 3).</summary>
+    public const string StalePlan = "SP4001";
+
+    /// <summary>More repos would change than <c>--max-changes</c> allows, so apply writes nothing (exit 4).</summary>
+    public const string TooManyChanges = "SP4002";
 }
