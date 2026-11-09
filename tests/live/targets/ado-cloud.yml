@@ -1,0 +1,10 @@
+# yaml-language-server: $schema=https://raw.githubusercontent.com/Quattordici/Setpoint/main/schema/v1/targets.json
+version: 1
+
+# The free Azure DevOps Services org. Only the gate-* repos in the setpoint-live project are managed.
+# Token: SETPOINT_LIVE_TOKEN.
+targets:
+  live:
+    platform: azuredevops
+    url: https://dev.azure.com/setpoint-live
+    scope: [setpoint-live/gate-*]

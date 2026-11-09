@@ -1,0 +1,8 @@
+# yaml-language-server: $schema=https://raw.githubusercontent.com/Quattordici/Setpoint/main/schema/v1/layer.json
+version: 1
+layer: repo
+repo: live/setpoint-live/gate-legacy
+
+rules:
+  allowedMergeTypes: [merge, squash]
+  requireCommentResolution: false     # ensure the comment rule is absent

@@ -1,0 +1,9 @@
+# yaml-language-server: $schema=https://raw.githubusercontent.com/Quattordici/Setpoint/main/schema/v1/targets.json
+version: 1
+
+# The throwaway GitHub Free org. Only its public gate-* repos are managed.
+# Token: SETPOINT_LIVE_TOKEN (a fine-grained PAT on the org; read-only for plan, Administration: write for apply).
+targets:
+  live:
+    platform: github
+    scope: [setpoint-live/gate-*]

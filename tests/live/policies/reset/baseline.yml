@@ -1,0 +1,12 @@
+# yaml-language-server: $schema=https://raw.githubusercontent.com/Quattordici/Setpoint/main/schema/v1/layer.json
+version: 1
+layer: baseline
+
+# Takes the gate repos back to (nearly) nothing before a gate run, so every run writes.
+# allowedMergeTypes can't be emptied, so it is left as it is; the VM snapshot is the full reset.
+rules:
+  minimumReviewers: { enabled: false }
+  requiredChecks: []
+  requireCommentResolution: false
+  allowedMergeTypes: ~
+  protectFromForcePushAndDelete: false
