@@ -6,6 +6,17 @@ Declare pull-request rules once in YAML, in a central policy repo, and Setpoint 
 
 > **Status:** early development. `validate`, `plan` and `apply` work against GitHub; Azure DevOps can be planned, and writing to it lands next. Progress is tracked in [the MVP build issue](https://github.com/Quattordici/Setpoint/issues/24).
 
+## Documentation
+
+| Page | For |
+|---|---|
+| [Getting started](docs/getting-started.md) | A first policy repo, `validate`, `plan` and `apply` |
+| [Permissions](docs/permissions.md) | The token scopes and the roles or ACLs each command needs, per platform and sign-in method |
+| [Pipelines](docs/pipelines.md) | Two-stage Azure Pipelines and GitHub Actions examples: plan read-only, apply behind an approval |
+| [Diagnostics and exit codes](docs/diagnostics.md) | Every `SPxxxx` code and exit code, and what to do about it |
+| [GitHub](docs/github.md), [Azure DevOps](docs/azure-devops.md) | How each platform is mapped, listed and written |
+| [Plan files](docs/plan-file.md) | The `plan.json` format |
+
 ## Commands
 
 | Command | Does |
@@ -37,7 +48,7 @@ The plan file format is described in [docs/plan-file.md](docs/plan-file.md).
 
 ## Diagnostics
 
-Every problem has a stable `SPxxxx` code, listed in [docs/diagnostics.md](docs/diagnostics.md). With `--output plain` (the default when output isn't a terminal) each one is a single `file:line:col: severity code: message` line.
+Every problem has a stable `SPxxxx` code, listed with every exit code in [docs/diagnostics.md](docs/diagnostics.md). With `--output plain` (the default when output isn't a terminal) each one is a single `file:line:col: severity code: message` line.
 
 ## Editor support
 

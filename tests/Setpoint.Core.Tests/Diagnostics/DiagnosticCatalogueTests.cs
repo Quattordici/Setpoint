@@ -75,6 +75,25 @@ public sealed partial class DiagnosticCatalogueTests
     }
 
     /// <summary>
+    /// Given docs/diagnostics.md,
+    /// when its exit code table is compared with the enum,
+    /// then it documents every exit code exactly once, with what to do about it.
+    /// </summary>
+    [Fact(DisplayName = "👍 docs/diagnostics.md lists every exit code")]
+    public void Docs_ExitCodes_MatchEnum()
+    {
+        // Arrange
+        string docs = File.ReadAllText(Path.Combine(RepoRoot(), "docs", "diagnostics.md"));
+        int[] expected = [.. Enum.GetValues<ExitCode>().Select(c => (int)c)];
+
+        // Act
+        int[] documented = [.. ExitCodeRow().Matches(docs).Select(m => int.Parse(m.Groups["code"].Value, System.Globalization.CultureInfo.InvariantCulture))];
+
+        // Assert
+        documented.ShouldBe(expected, ignoreOrder: true);
+    }
+
+    /// <summary>
     /// Given a mix of warnings, errors and info lines,
     /// when --strict is applied,
     /// then warnings become errors and info lines stay as they are.
@@ -115,4 +134,7 @@ public sealed partial class DiagnosticCatalogueTests
 
     [GeneratedRegex(@"^\| (?<code>SP[0-9]{4}) \| (?<severity>[a-z]+) \|", RegexOptions.Multiline)]
     private static partial Regex DocsRow();
+
+    [GeneratedRegex(@"^\| (?<code>[0-9]) \| [^|]+ \| [^|]+ \|\r?$", RegexOptions.Multiline)]
+    private static partial Regex ExitCodeRow();
 }

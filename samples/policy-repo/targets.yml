@@ -1,0 +1,17 @@
+# yaml-language-server: $schema=https://raw.githubusercontent.com/Quattordici/Setpoint/main/schema/v1/targets.json
+version: 1
+
+targets:
+  # A GitHub organization. The token comes from SETPOINT_GITHUB_TOKEN.
+  github:
+    platform: github
+    scope: [acme/*]
+    exclude: [acme/*-sandbox]
+
+  # An Azure DevOps Services organization. The token comes from SETPOINT_ADO_TOKEN.
+  # For Azure DevOps Server 2022, use the collection URL instead,
+  # such as https://ado.example.com/tfs/DefaultCollection.
+  ado:
+    platform: azuredevops
+    url: https://dev.azure.com/acme
+    scope: ["Payments/*", "Platform/*"]

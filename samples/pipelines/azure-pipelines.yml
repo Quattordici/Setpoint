@@ -1,0 +1,106 @@
+# Setpoint in Azure Pipelines: a read-only plan stage, and an apply stage behind a manual approval.
+# Put this file in the policy repo. See docs/pipelines.md for the setup it needs.
+
+trigger:
+  branches:
+    include: [main]
+
+pr:
+  branches:
+    include: [main]
+
+schedules:
+  - cron: "0 5 * * 1-5"         # also re-plan on weekday mornings, to catch drift
+    displayName: Weekday drift check
+    branches:
+      include: [main]
+    always: true
+
+pool:
+  vmImage: ubuntu-latest
+
+variables:
+  # Pin the version: apply refuses a plan made by another Setpoint version.
+  setpointVersion: 0.1.0-alpha
+  setpoint: $(Agent.ToolsDirectory)/setpoint/setpoint
+
+stages:
+  - stage: Plan
+    jobs:
+      - job: plan
+        variables:
+          - group: setpoint-plan          # read-only secrets: githubPlanToken, adoPlanToken
+        steps:
+          - checkout: self
+
+          - task: UseDotNet@2
+            inputs:
+              packageType: runtime
+              version: 10.0.x
+
+          - script: dotnet tool install Setpoint --version $(setpointVersion) --tool-path $(Agent.ToolsDirectory)/setpoint
+            displayName: Install Setpoint
+
+          - script: $(setpoint) validate --strict
+            displayName: Validate
+
+          # --exit-code makes plan exit 5 when there are changes. Turn that into an output variable,
+          # so the apply stage only runs, and only asks for approval, when there is something to apply.
+          - bash: |
+              set +e
+              "$(setpoint)" plan --out "$(Build.ArtifactStagingDirectory)/plan.json" --exit-code
+              code=$?
+              set -e
+              if [ "$code" -eq 5 ]; then
+                echo "##vso[task.setvariable variable=hasChanges;isOutput=true]true"
+                exit 0
+              fi
+              exit "$code"
+            name: plan
+            displayName: Plan
+            env:
+              SETPOINT_GITHUB_TOKEN: $(githubPlanToken)
+              SETPOINT_ADO_TOKEN: $(adoPlanToken)
+
+          - publish: $(Build.ArtifactStagingDirectory)/plan.json
+            artifact: plan
+            displayName: Publish the plan
+            condition: and(succeeded(), eq(variables['plan.hasChanges'], 'true'))
+
+  - stage: Apply
+    dependsOn: Plan
+    # Only from main, never from a pull request, and only when the plan found changes.
+    condition: >-
+      and(succeeded(),
+          eq(variables['Build.SourceBranch'], 'refs/heads/main'),
+          ne(variables['Build.Reason'], 'PullRequest'),
+          eq(dependencies.Plan.outputs['plan.plan.hasChanges'], 'true'))
+    jobs:
+      - deployment: apply
+        # Add an Approvals check to this environment (Pipelines > Environments > setpoint > Approvals and checks).
+        environment: setpoint
+        variables:
+          - group: setpoint-apply         # write secrets: githubApplyToken, adoApplyToken
+        strategy:
+          runOnce:
+            deploy:
+              steps:
+                # apply hashes the policy files, so it needs the same commit the plan was made from.
+                - checkout: self
+
+                - download: current
+                  artifact: plan
+
+                - task: UseDotNet@2
+                  inputs:
+                    packageType: runtime
+                    version: 10.0.x
+
+                - script: dotnet tool install Setpoint --version $(setpointVersion) --tool-path $(Agent.ToolsDirectory)/setpoint
+                  displayName: Install Setpoint
+
+                - script: $(setpoint) apply "$(Pipeline.Workspace)/plan/plan.json"
+                  displayName: Apply
+                  env:
+                    SETPOINT_GITHUB_TOKEN: $(githubApplyToken)
+                    SETPOINT_ADO_TOKEN: $(adoApplyToken)
