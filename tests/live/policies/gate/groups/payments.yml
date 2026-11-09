@@ -1,0 +1,20 @@
+# yaml-language-server: $schema=https://raw.githubusercontent.com/Quattordici/Setpoint/main/schema/v1/layer.json
+version: 1
+layer: group
+name: payments
+
+selectors:
+  - live/setpoint-live/gate-payments
+
+rules:
+  minimumReviewers:
+    count: 2
+    resetOnPush: true
+  # On Azure DevOps this needs a pipeline named gate-ci in the setpoint-live project.
+  requiredChecks:
+    - name: gate-ci
+  allowedMergeTypes: [squash]
+
+azuredevops:
+  requiredChecks:
+    validDuration: 720

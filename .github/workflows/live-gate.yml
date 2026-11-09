@@ -1,0 +1,86 @@
+name: Live gate
+
+# Runs the live gates against the test environments, by hand or nightly, on a self-hosted runner on
+# Mattias's machine (labels: self-hosted, setpoint-live). See docs/live-gates.md.
+#
+# Only schedule and workflow_dispatch trigger it, never pull_request, so code from a fork can't reach the
+# self-hosted runner or the test tokens. It never runs against the employer's Azure DevOps Server: that is
+# plan-only and run by hand, so its token never sits in GitHub.
+
+on:
+  workflow_dispatch:
+    inputs:
+      environment:
+        description: Which test environment
+        type: choice
+        options: [all, github, ado-cloud, ado-server]
+        default: all
+      record:
+        description: Record redacted WireMock fixtures (uploaded as an artifact, never committed by the workflow)
+        type: boolean
+        default: false
+  schedule:
+    - cron: "0 2 * * *"
+
+permissions:
+  contents: read
+
+concurrency:
+  group: live-gate
+  cancel-in-progress: false
+
+jobs:
+  gate:
+    name: Live gate (${{ matrix.environment }})
+    strategy:
+      fail-fast: false
+      # One at a time: the Express VM and the test orgs are shared state.
+      max-parallel: 1
+      matrix:
+        environment: [github, ado-cloud, ado-server]
+    # Off until the environments exist: set the repository variable LIVE_GATE_ENABLED to true to turn it on.
+    if: github.repository == 'Quattordici/Setpoint' && vars.LIVE_GATE_ENABLED == 'true'
+    runs-on: [self-hosted, setpoint-live]
+    # Holds the test tokens: LIVE_GITHUB_TOKEN, LIVE_ADO_CLOUD_TOKEN, LIVE_ADO_SERVER_TOKEN.
+    environment: live-gate
+    steps:
+      - name: Skip environments not asked for
+        id: pick
+        shell: pwsh
+        run: |
+          $wanted = '${{ github.event.inputs.environment }}'
+          $run = (-not $wanted) -or $wanted -eq 'all' -or $wanted -eq '${{ matrix.environment }}'
+          "run=$($run.ToString().ToLowerInvariant())" >> $env:GITHUB_OUTPUT
+
+      - uses: actions/checkout@v4
+        if: steps.pick.outputs.run == 'true'
+
+      - uses: actions/setup-dotnet@v4
+        if: steps.pick.outputs.run == 'true'
+        with:
+          global-json-file: global.json
+
+      - name: Run the gate
+        if: steps.pick.outputs.run == 'true'
+        shell: pwsh
+        env:
+          SETPOINT_LIVE_TOKEN: ${{ matrix.environment == 'github' && secrets.LIVE_GITHUB_TOKEN || matrix.environment == 'ado-cloud' && secrets.LIVE_ADO_CLOUD_TOKEN || secrets.LIVE_ADO_SERVER_TOKEN }}
+        run: |
+          $gate = @{ Environment = '${{ matrix.environment }}' }
+          if ('${{ matrix.environment }}' -eq 'ado-server') { $gate.ResetVm = $true }
+          # Azure DevOps writes land with #36. Until then set no LIVE_GATE_ADO_APPLY, and the ADO gates only plan.
+          if ('${{ matrix.environment }}' -like 'ado-*' -and '${{ vars.LIVE_GATE_ADO_APPLY }}' -ne 'true') { $gate.PlanOnly = $true }
+          if ('${{ github.event.inputs.record }}' -eq 'true') { $gate.Record = $true }
+          ./tests/live/Invoke-LiveGate.ps1 @gate
+
+      - name: Upload the gate output
+        if: always() && steps.pick.outputs.run == 'true'
+        uses: actions/upload-artifact@v4
+        with:
+          name: live-gate-${{ matrix.environment }}
+          path: |
+            tests/live/out/**/*.txt
+            tests/live/out/**/*.log
+            tests/live/out/**/plan.json
+            tests/live/out/**/recordings/**
+          retention-days: 14

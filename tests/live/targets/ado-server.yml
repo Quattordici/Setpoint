@@ -1,0 +1,10 @@
+# yaml-language-server: $schema=https://raw.githubusercontent.com/Quattordici/Setpoint/main/schema/v1/targets.json
+version: 1
+
+# The Azure DevOps Server 2022 Express VM, restored from its snapshot before each live apply.
+# This is the phase 2 gate. Token: SETPOINT_LIVE_TOKEN.
+targets:
+  live:
+    platform: azuredevops
+    url: http://setpoint-ado/DefaultCollection
+    scope: [setpoint-live/gate-*]

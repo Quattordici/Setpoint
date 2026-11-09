@@ -1,0 +1,24 @@
+# yaml-language-server: $schema=https://raw.githubusercontent.com/Quattordici/Setpoint/main/schema/v1/layer.json
+version: 1
+layer: baseline
+
+# The gate policy: every neutral rule, a group, an override and both provider blocks,
+# so one live run exercises every mapping.
+locked: [protectFromForcePushAndDelete]
+
+rules:
+  minimumReviewers:
+    count: 1
+    resetOnPush: true
+  requireCommentResolution: true
+  allowedMergeTypes: [squash, rebase]
+  protectFromForcePushAndDelete: true
+
+azuredevops:
+  minimumReviewers:
+    creatorVoteCounts: false
+    allowDownvotes: false
+
+github:
+  pullRequest:
+    requireLastPushApproval: true
