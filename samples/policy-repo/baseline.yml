@@ -1,0 +1,14 @@
+# yaml-language-server: $schema=https://raw.githubusercontent.com/Quattordici/Setpoint/main/schema/v1/layer.json
+version: 1
+layer: baseline
+
+# Groups and repo overrides can't change these.
+locked: [minimumReviewers, protectFromForcePushAndDelete]
+
+rules:
+  minimumReviewers:
+    count: 1
+    resetOnPush: true
+  requireCommentResolution: true
+  allowedMergeTypes: [squash, rebase]
+  protectFromForcePushAndDelete: true

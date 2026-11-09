@@ -1,0 +1,16 @@
+# yaml-language-server: $schema=https://raw.githubusercontent.com/Quattordici/Setpoint/main/schema/v1/layer.json
+version: 1
+layer: group
+name: payments
+
+# Every selector starts with a target name from targets.yml.
+selectors:
+  - ado/Payments/*
+  - github/acme/payments-*
+
+rules:
+  # On Azure DevOps this is the build validation policy for the pipeline named payments-ci.
+  # On GitHub it is the required status check with that name.
+  requiredChecks:
+    - name: payments-ci
+  allowedMergeTypes: [squash]

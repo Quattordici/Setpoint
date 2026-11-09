@@ -1,0 +1,8 @@
+# yaml-language-server: $schema=https://raw.githubusercontent.com/Quattordici/Setpoint/main/schema/v1/layer.json
+version: 1
+layer: repo
+repo: github/acme/payments-legacy
+
+rules:
+  requiredChecks: ~                 # unmanaged here: the team keeps its own checks
+  allowedMergeTypes: [merge, squash]

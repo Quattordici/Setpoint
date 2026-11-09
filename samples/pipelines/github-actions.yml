@@ -1,0 +1,97 @@
+# Setpoint in GitHub Actions: a read-only plan job, and an apply job behind a required reviewer.
+# Put this file in the policy repo as .github/workflows/setpoint.yml. See docs/pipelines.md for the setup it needs.
+
+name: Setpoint
+
+on:
+  pull_request:
+  push:
+    branches: [main]
+  schedule:
+    - cron: "0 5 * * 1-5"         # also re-plan on weekday mornings, to catch drift
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: setpoint-${{ github.ref }}
+  cancel-in-progress: false       # never cancel a running apply
+
+env:
+  # Pin the version: apply refuses a plan made by another Setpoint version.
+  SETPOINT_VERSION: 0.1.0-alpha
+  DOTNET_NOLOGO: true
+
+jobs:
+  plan:
+    runs-on: ubuntu-latest
+    # Read-only secrets live in this environment, which has no reviewers.
+    environment: setpoint-plan
+    outputs:
+      has-changes: ${{ steps.plan.outputs.has-changes }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: 10.0.x
+
+      - name: Install Setpoint
+        run: dotnet tool install Setpoint --version "$SETPOINT_VERSION" --tool-path "$RUNNER_TEMP/setpoint"
+
+      - name: Validate
+        run: '"$RUNNER_TEMP/setpoint/setpoint" validate --strict'
+
+      # --exit-code makes plan exit 5 when there are changes. Turn that into a job output,
+      # so the apply job only runs, and only asks for review, when there is something to apply.
+      - name: Plan
+        id: plan
+        env:
+          SETPOINT_GITHUB_TOKEN: ${{ secrets.SETPOINT_GITHUB_TOKEN }}
+          SETPOINT_ADO_TOKEN: ${{ secrets.SETPOINT_ADO_TOKEN }}
+        run: |
+          set +e
+          "$RUNNER_TEMP/setpoint/setpoint" plan --out plan.json --exit-code
+          code=$?
+          set -e
+          if [ "$code" -eq 5 ]; then
+            echo "has-changes=true" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+          exit "$code"
+
+      - name: Publish the plan
+        if: steps.plan.outputs.has-changes == 'true'
+        uses: actions/upload-artifact@v4
+        with:
+          name: plan
+          path: plan.json
+
+  apply:
+    needs: plan
+    # Only from main, never from a pull request, and only when the plan found changes.
+    if: github.ref == 'refs/heads/main' && github.event_name != 'pull_request' && needs.plan.outputs.has-changes == 'true'
+    runs-on: ubuntu-latest
+    # Write secrets live in this environment, which has required reviewers.
+    environment: setpoint-apply
+    steps:
+      # apply hashes the policy files, so it needs the same commit the plan was made from.
+      - uses: actions/checkout@v4
+
+      - uses: actions/download-artifact@v4
+        with:
+          name: plan
+
+      - uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: 10.0.x
+
+      - name: Install Setpoint
+        run: dotnet tool install Setpoint --version "$SETPOINT_VERSION" --tool-path "$RUNNER_TEMP/setpoint"
+
+      - name: Apply
+        env:
+          SETPOINT_GITHUB_TOKEN: ${{ secrets.SETPOINT_GITHUB_TOKEN }}
+          SETPOINT_ADO_TOKEN: ${{ secrets.SETPOINT_ADO_TOKEN }}
+        run: '"$RUNNER_TEMP/setpoint/setpoint" apply plan.json'
