@@ -13,6 +13,7 @@ Declare pull-request rules once in YAML, in a central policy repo, and Setpoint 
 | [Getting started](docs/getting-started.md) | A first policy repo, `validate`, `plan` and `apply` |
 | [Permissions](docs/permissions.md) | The token scopes and the roles or ACLs each command needs, per platform and sign-in method |
 | [Pipelines](docs/pipelines.md) | Two-stage Azure Pipelines and GitHub Actions examples: plan read-only, apply behind an approval |
+| [Drift](docs/drift.md) | `setpoint drift`, its exit codes, and the scheduled drift pipelines |
 | [Diagnostics and exit codes](docs/diagnostics.md) | Every `SPxxxx` code and exit code, and what to do about it |
 | [GitHub](docs/github.md), [Azure DevOps](docs/azure-devops.md) | How each platform is mapped, listed and written |
 | [Plan files](docs/plan-file.md) | The `plan.json` format |
@@ -24,7 +25,7 @@ Declare pull-request rules once in YAML, in a central policy repo, and Setpoint 
 |---|---|
 | `setpoint validate` | Offline checks of the policy repo against the schema and merge rules |
 | `setpoint plan [--out plan.json] [--json] [--exit-code]` | Reads live state and shows the changes apply would make |
-| `setpoint drift [--report drift.json] [--json]` | Checks that live state still matches the policy; exits 5 when it doesn't |
+| `setpoint drift [--report drift.json] [--json] [--summary file.md]` | Checks that live state still matches the policy; exits 5 when it doesn't |
 | `setpoint apply plan.json` | Applies a saved plan, after checking nothing moved since it was made |
 | `setpoint apply --yes` | Re-plans and applies in one step |
 
@@ -55,6 +56,8 @@ The plan file format is described in [docs/plan-file.md](docs/plan-file.md).
 - It exits 0 when every repo in scope matches the policy, and 5 when any repo differs.
 - It exits 1 when a target can't be reached or a repo can't be read, because what wasn't read could be hiding drift. `--skip-unreachable` leaves an unreachable target out with a warning instead.
 - `--report drift.json` saves the report, and `--json` prints it. The report is a plan file, so after review `setpoint apply drift.json` puts the drifted settings back, with the same checks as any apply. A report from a run with errors is incomplete: plan again before applying.
+
+- `--summary <file>` appends a short Markdown summary for the pipeline's run page: the verdict, a table of drifted repos and each difference on one line, with in-sync repos only counted. Point it at `$GITHUB_STEP_SUMMARY` on GitHub Actions, or at a file you publish with `##vso[task.uploadsummary]` on Azure Pipelines. `plan --summary` writes the same for a plan. It never holds a native payload or a secret.
 
 Setpoint keeps no state, so drift can't tell a setting someone changed by hand from a policy change that hasn't been applied yet. Run it against the policy as it is on `main`, where every merged change is expected to be applied.
 

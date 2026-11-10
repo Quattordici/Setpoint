@@ -229,7 +229,7 @@ public sealed class PlanRendererTests
         failedVerdict.ShouldBe("Drift check failed with 1 error, so some drift may not be shown. 1 repo drifted among those that were read.");
     }
 
-    private static PlanDocument Sample() => new()
+    internal static PlanDocument Sample() => new()
     {
         FormatVersion = 1,
         SetpointVersion = "0.1.0-alpha",
@@ -272,7 +272,7 @@ public sealed class PlanRendererTests
         Summary = new PlanSummary(ReposChanged: 1, Create: 1, Update: 1, Remove: 0, InSync: 2, Skipped: 1, Errors: 0, Unmanaged: 3, Warnings: 2),
     };
 
-    private static PlanRepo Repo(string target, string path, PlanRepoStatus status, IReadOnlyList<string> layers) => new()
+    internal static PlanRepo Repo(string target, string path, PlanRepoStatus status, IReadOnlyList<string> layers) => new()
     {
         Target = target,
         Path = path,

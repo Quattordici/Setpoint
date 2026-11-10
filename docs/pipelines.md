@@ -2,7 +2,7 @@
 
 A platform team usually runs Setpoint from the policy repo's own pipeline, in two stages:
 
-1. **Plan**, on every pull request, every push to `main` and on a schedule. It validates the policy, plans with **read-only** credentials, and publishes `plan.json` as an artifact.
+1. **Plan**, on every pull request and every push to `main`. It validates the policy, plans with **read-only** credentials, and publishes `plan.json` as an artifact.
 2. **Apply**, only on `main` and only when the plan found changes. It waits for a person to approve, then applies that exact `plan.json` with **write** credentials.
 
 Splitting them means the write credentials are only ever exposed to a job a person approved, and the person approves the changes they saw: `apply` refuses the plan, writing nothing, if anything moved since it was made (exit 3).
@@ -23,7 +23,7 @@ Both assume the targets are named `github` and `ado`, as in [the sample policy r
 - **`plan --exit-code`** exits 5 when there are changes. The step turns that into an output, `hasChanges`, so the apply stage is skipped, and nobody is asked to approve, when everything is in sync. Any other non-zero code fails the stage: 1 for a runtime failure such as an unreachable target, 2 for an invalid policy. See [diagnostics.md](diagnostics.md#exit-codes).
 - **The apply stage checks out the same commit.** `apply` hashes the policy files and refuses the plan if they changed, so it needs them exactly as the plan saw them. Both platforms check out the triggering commit in every stage, which is what you want.
 - **The plan artifact holds no secrets.** It records each target's sign-in method and identity, never a token, so it is safe to keep and to show reviewers.
-- **The schedule** re-plans on weekday mornings, so drift (someone changing a policy by hand) shows up as a pending apply.
+- **Drift has its own pipeline.** A separate scheduled pipeline runs `setpoint drift` with the same read-only secrets and fails when live state no longer matches the policy. See [drift.md](drift.md).
 - `--max-changes` keeps its default of 25 repos. A plan that changes more stops at apply with exit 4. Raise it with `--max-changes N` on the apply step when a large change is intended.
 
 ## Azure Pipelines

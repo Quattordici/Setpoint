@@ -124,6 +124,28 @@ public sealed class DriftCommandTests : IDisposable
     }
 
     /// <summary>
+    /// Given drift and a summary file that already exists, as $GITHUB_STEP_SUMMARY may,
+    /// when drift runs with --summary,
+    /// then the Markdown summary is appended after what was there.
+    /// </summary>
+    [Fact(DisplayName = "👍 drift --summary appends a Markdown summary")]
+    public async Task Drift_Summary_Appends()
+    {
+        // Arrange
+        string summary = Path.Combine(_scratch.FullName, "step-summary.md");
+        await File.WriteAllTextAsync(summary, "earlier\n", TestContext.Current.CancellationToken);
+
+        // Act
+        CliRun run = await CliRun.InvokeAsync(Services, "drift", "-p", s_policy, "--summary", summary, "-o", "plain");
+
+        // Assert
+        run.ExitCode.ShouldBe(ExitCode.ChangesFound);
+        string text = await File.ReadAllTextAsync(summary, TestContext.Current.CancellationToken);
+        text.ShouldStartWith("earlier\n## Setpoint drift: drift found\n");
+        text.ShouldContain("| `github/quattordici/payments-gateway` | baseline → payments | ");
+    }
+
+    /// <summary>
     /// Given an unreachable GitHub target and --report,
     /// when drift runs, and again with --skip-unreachable,
     /// then the first exits 1, because the target could be hiding drift, and still saves an incomplete report;

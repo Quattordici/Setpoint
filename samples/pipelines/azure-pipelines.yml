@@ -9,13 +9,6 @@ pr:
   branches:
     include: [main]
 
-schedules:
-  - cron: "0 5 * * 1-5"         # also re-plan on weekday mornings, to catch drift
-    displayName: Weekday drift check
-    branches:
-      include: [main]
-    always: true
-
 pool:
   vmImage: ubuntu-latest
 

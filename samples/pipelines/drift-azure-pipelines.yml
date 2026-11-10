@@ -1,0 +1,68 @@
+# Setpoint drift check in Azure Pipelines: a scheduled, read-only run that fails when live state no longer
+# matches the policy on main, so the pipeline's failure notifications tell the platform team.
+# Put this file in the policy repo next to azure-pipelines.yml, and create a second pipeline from it.
+# See docs/drift.md for what it checks and docs/pipelines.md for the variable group it reads.
+
+trigger: none
+pr: none
+
+schedules:
+  - cron: "0 5 * * 1-5"         # weekday mornings, UTC
+    displayName: Weekday drift check
+    branches:
+      include: [main]
+    always: true                # run even when main hasn't changed: drift happens outside the repo
+
+pool:
+  vmImage: ubuntu-latest
+
+variables:
+  # Pin the same version as the plan/apply pipeline, so a drift report can be applied there.
+  setpointVersion: 0.1.0-alpha
+  setpoint: $(Agent.ToolsDirectory)/setpoint/setpoint
+
+jobs:
+  - job: drift
+    variables:
+      - group: setpoint-plan      # read-only secrets only: githubPlanToken, adoPlanToken
+    steps:
+      - checkout: self
+
+      - task: UseDotNet@2
+        inputs:
+          packageType: runtime
+          version: 10.0.x
+
+      - script: dotnet tool install Setpoint --version $(setpointVersion) --tool-path $(Agent.ToolsDirectory)/setpoint
+        displayName: Install Setpoint
+
+      - script: $(setpoint) validate --strict
+        displayName: Validate
+
+      # drift exits 5 when anything differs from the policy, 1 when a target or repo couldn't be read,
+      # and 2 for an invalid policy. Any of them fails the run.
+      - bash: |
+          set +e
+          "$(setpoint)" drift --strict \
+            --report "$(Build.ArtifactStagingDirectory)/drift.json" \
+            --summary "$(Build.ArtifactStagingDirectory)/drift.md"
+          code=$?
+          set -e
+          if [ -f "$(Build.ArtifactStagingDirectory)/drift.md" ]; then
+            echo "##vso[task.uploadsummary]$(Build.ArtifactStagingDirectory)/drift.md"
+          fi
+          if [ "$code" -eq 5 ]; then
+            echo "##vso[task.logissue type=error]Drift found: live state differs from the policy on main. See the Setpoint drift summary."
+          fi
+          exit "$code"
+        displayName: Check for drift
+        env:
+          SETPOINT_GITHUB_TOKEN: $(githubPlanToken)
+          SETPOINT_ADO_TOKEN: $(adoPlanToken)
+
+      # Keep the report even when the check fails: it is the record of what drifted. After review,
+      # 'setpoint apply drift.json' from the apply side puts it back (see docs/drift.md).
+      - publish: $(Build.ArtifactStagingDirectory)/drift.json
+        artifact: drift
+        displayName: Publish the drift report
+        condition: always()

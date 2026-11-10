@@ -26,6 +26,7 @@ internal static class PlanCommand
         {
             Description = "Exit with code 5 when there are changes.",
         };
+        Option<FileInfo?> summary = CommonOptions.Summary();
         Option<bool> strict = CommonOptions.Strict();
         Option<bool> verbose = CommonOptions.Verbose();
         Option<OutputFormat?> output = CommonOptions.Output();
@@ -39,6 +40,7 @@ internal static class PlanCommand
             policy,
             outFile,
             json,
+            summary,
             exitCode,
             strict,
             verbose,
@@ -60,7 +62,8 @@ internal static class PlanCommand
                 result.GetValue(verbose),
                 OutputFormatResolver.Resolve(result.GetValue(output), console.Out),
                 new PlanOptions(result.GetValue(strict), result.GetValue(skipUnreachable), result.GetValue(allowUnsupportedServer), result.GetValue(maxChanges)),
-                result.GetValue(record)),
+                result.GetValue(record),
+                result.GetValue(summary)),
             cancellationToken));
         return command;
     }
@@ -95,6 +98,11 @@ internal static class PlanCommand
             }
         }
 
+        if (arguments.Summary is { } summaryFile)
+        {
+            await MarkdownSummary.AppendAsync(summaryFile, result.Document, PlanView.Plan, cancellationToken);
+        }
+
         if (arguments.Json)
         {
             DiagnosticRenderer.Write(console, diagnostics, arguments.Format, toError: true);
@@ -126,4 +134,5 @@ internal sealed record PlanArguments(
     bool Verbose,
     OutputFormat Format,
     PlanOptions Options,
-    DirectoryInfo? Record = null);
+    DirectoryInfo? Record = null,
+    FileInfo? Summary = null);
