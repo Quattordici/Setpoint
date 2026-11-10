@@ -26,6 +26,7 @@ internal static class DriftCommand
         {
             Description = "Write the drift report to standard output as JSON, in the plan file schema.",
         };
+        Option<FileInfo?> summary = CommonOptions.Summary();
         Option<bool> strict = CommonOptions.Strict();
         Option<bool> verbose = CommonOptions.Verbose();
         Option<OutputFormat?> output = CommonOptions.Output();
@@ -38,6 +39,7 @@ internal static class DriftCommand
             policy,
             report,
             json,
+            summary,
             strict,
             verbose,
             output,
@@ -56,7 +58,8 @@ internal static class DriftCommand
                 result.GetValue(verbose),
                 OutputFormatResolver.Resolve(result.GetValue(output), console.Out),
                 new PlanOptions(result.GetValue(strict), result.GetValue(skipUnreachable), result.GetValue(allowUnsupportedServer)),
-                result.GetValue(record)),
+                result.GetValue(record),
+                result.GetValue(summary)),
             cancellationToken));
         return command;
     }
@@ -84,6 +87,11 @@ internal static class DriftCommand
             file.Directory?.Create();
             await File.WriteAllTextAsync(file.FullName, report, cancellationToken);
             savedTo = file.FullName;
+        }
+
+        if (arguments.Summary is { } summaryFile)
+        {
+            await MarkdownSummary.AppendAsync(summaryFile, result.Document, PlanView.Drift, cancellationToken);
         }
 
         if (arguments.Json)
@@ -122,4 +130,5 @@ internal sealed record DriftArguments(
     bool Verbose,
     OutputFormat Format,
     PlanOptions Options,
-    DirectoryInfo? Record = null);
+    DirectoryInfo? Record = null,
+    FileInfo? Summary = null);
