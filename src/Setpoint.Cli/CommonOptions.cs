@@ -48,6 +48,12 @@ internal static class CommonOptions
         DefaultValueFactory = _ => 25,
     };
 
+    public static Option<FileInfo?> Summary() => new("--summary")
+    {
+        Description = "Append a Markdown summary to this file, such as $GITHUB_STEP_SUMMARY, for the pipeline's run page.",
+        HelpName = "file",
+    };
+
     public static Option<bool> FailFast() => new("--fail-fast")
     {
         Description = "Stop the whole run at the first failed write, instead of only that repo.",
