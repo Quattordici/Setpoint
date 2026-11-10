@@ -5,6 +5,7 @@ using Setpoint.Adapters.GitHub.Api;
 using Setpoint.Adapters.GitHub.Auth;
 using Setpoint.Adapters.GitHub.Policy;
 using Setpoint.Adapters.GitHub.Rulesets;
+using Setpoint.Adapters.GitHub.Teams;
 using Setpoint.Core.Diagnostics;
 using Setpoint.Core.Planning;
 using Setpoint.Core.Policy;
@@ -16,7 +17,8 @@ namespace Setpoint.Adapters.GitHub;
 
 /// <summary>
 /// The GitHub adapter. Setpoint owns one ruleset per repo, named <c>setpoint</c>, on the default branch; every other
-/// ruleset and the repo's own merge settings are unmanaged, and are only read to warn when they are stricter.
+/// ruleset and the repo's own merge settings are unmanaged, and are only read to warn when they are stricter. It
+/// also owns the permission on the repo of each team the <c>access</c> rule names.
 /// </summary>
 public sealed class GitHubAdapter : IProviderAdapter, IDisposable
 {
@@ -33,6 +35,8 @@ public sealed class GitHubAdapter : IProviderAdapter, IDisposable
     private readonly ConcurrentDictionary<string, Session> _sessions = new(StringComparer.Ordinal);
     private readonly ConcurrentDictionary<RepoRef, GitHubRepository> _listed = new();
     private readonly ConcurrentDictionary<RepoRef, List<GitHubRulesetSummary>> _rulesets = new();
+    private readonly ConcurrentDictionary<RepoRef, TeamContext> _teams = new();
+    private readonly ConcurrentDictionary<(string Target, string Org), Lazy<Task<IReadOnlySet<string>?>>> _orgTeams = new();
 
     /// <summary>Creates the adapter.</summary>
     public GitHubAdapter(GitHubAdapterOptions? options = null) => _options = options ?? new GitHubAdapterOptions();
@@ -193,6 +197,7 @@ public sealed class GitHubAdapter : IProviderAdapter, IDisposable
             unmanaged.Add(new UnmanagedSetting(RulesetMapper.AllowedMergeTypes, "repo merge settings", new JsonArray([.. allowed.Select(m => (JsonNode)m)])));
         }
 
+        _teams[repo] = await ReadTeamsAsync(session, repo, details.Owner, objects, unknown, cancellationToken).ConfigureAwait(false);
         return new LiveSnapshot(objects, unmanaged, [], unknown);
     }
 
@@ -226,7 +231,36 @@ public sealed class GitHubAdapter : IProviderAdapter, IDisposable
             rules[rule] = carried.GetValueOrDefault(rule)?.DeepClone();
         }
 
-        return [new DesiredObject(MatchKey, CreateKey, rules, payload, $"{RulesetTitle} (new)")];
+        TeamContext teams = _teams.GetValueOrDefault(desired.Repo) ?? new TeamContext(new GitHubAccount(desired.Repo.Owner), null);
+        return [new DesiredObject(MatchKey, CreateKey, rules, payload, $"{RulesetTitle} (new)"), .. TeamAccess.Map(desired.Rules, teams.Owner, teams.OrgTeams)];
+    }
+
+    // A repo's teams, each with its permission, as live objects. A token that may not list them leaves access
+    // unknown. The organization's teams are listed once per run, so a misspelt slug fails the plan, not the apply.
+    private async Task<TeamContext> ReadTeamsAsync(Session session, RepoRef repo, GitHubAccount owner, List<LiveObject> objects, List<string> unknown, CancellationToken cancellationToken)
+    {
+        if (!owner.MayHaveTeams)
+        {
+            return new TeamContext(owner, null);
+        }
+
+        List<GitHubTeam>? teams = await session.Api.ListRepoTeamsAsync(repo.Owner, repo.Name, cancellationToken).ConfigureAwait(false);
+        if (teams is null)
+        {
+            unknown.AddRange(TeamAccess.Rules);
+        }
+        else
+        {
+            objects.AddRange(TeamAccess.Read(teams));
+        }
+
+        IReadOnlySet<string>? orgTeams = await _orgTeams
+            .GetOrAdd((repo.Target, owner.Login.ToLowerInvariant()), key => new Lazy<Task<IReadOnlySet<string>?>>(async () =>
+                (await session.Api.ListOrgTeamsAsync(owner.Login, cancellationToken).ConfigureAwait(false))?
+                    .Select(t => t.Slug.ToLowerInvariant())
+                    .ToHashSet(StringComparer.Ordinal)))
+            .Value.ConfigureAwait(false);
+        return new TeamContext(owner, orgTeams);
     }
 
     /// <summary>
@@ -271,9 +305,14 @@ public sealed class GitHubAdapter : IProviderAdapter, IDisposable
 
     private static async Task<string?> WriteAsync(GitHubApiClient api, RepoRef repo, PlanObject planned, CancellationToken cancellationToken)
     {
+        if (TeamAccess.Slug(planned.MatchKey) is { } slug)
+        {
+            return await WriteTeamAsync(api, repo, slug, planned, cancellationToken).ConfigureAwait(false);
+        }
+
         if (planned.MatchKey != MatchKey)
         {
-            return $"{planned.Key} is not the setpoint ruleset; the GitHub adapter only ever writes that one.";
+            return $"{planned.Key} is not the setpoint ruleset or a team's access; the GitHub adapter writes nothing else.";
         }
 
         long? id = RulesetId(planned.Key);
@@ -415,6 +454,49 @@ public sealed class GitHubAdapter : IProviderAdapter, IDisposable
             app.AddInstallation(installation.Account.Login, installation.Id);
         }
     }
+
+    // A team's permission on the repo: PUT with the planned payload sets it, DELETE takes the repo away from the team.
+    private static async Task<string?> WriteTeamAsync(GitHubApiClient api, RepoRef repo, string slug, PlanObject planned, CancellationToken cancellationToken)
+    {
+        HttpResponseMessage response;
+        try
+        {
+            response = (planned.Operation, planned.Payload) switch
+            {
+                (ObjectOperation.Create or ObjectOperation.Update, JsonObject payload) =>
+                    await api.SetTeamRepoAsync(repo.Owner, slug, repo.Owner, repo.Name, payload, cancellationToken).ConfigureAwait(false),
+                (ObjectOperation.Delete, _) => await api.RemoveTeamRepoAsync(repo.Owner, slug, repo.Owner, repo.Name, cancellationToken).ConfigureAwait(false),
+                _ => throw new InvalidOperationException($"The plan's {planned.Operation.ToString().ToLowerInvariant()} of {planned.Key} has no payload to write."),
+            };
+        }
+        catch (Exception ex) when (ex is not OperationCanceledException || !cancellationToken.IsCancellationRequested)
+        {
+            return ex.Message;
+        }
+
+        using (response)
+        {
+            if (response.IsSuccessStatusCode)
+            {
+                return null;
+            }
+
+            string body = await response.Content.ReadAsStringAsync(cancellationToken).ConfigureAwait(false);
+            string message = GitHubMessage(body) ?? response.ReasonPhrase ?? "no message";
+            const string permission = "The token needs Administration: write on the repo and Members: read on the organization " +
+                "(a classic token needs the repo and read:org scopes), and its account must be an organization owner, or a maintainer of the team with admin on the repo.";
+            return (int)response.StatusCode switch
+            {
+                403 => $"GitHub refused to change team {slug}'s access (403: {message}). {permission}",
+                404 => $"GitHub couldn't find team {slug} or the repo (404: {message}). Check the slug. {permission}",
+                422 => $"GitHub rejected team {slug}'s access (422: {message}).",
+                int status => $"Changing team {slug}'s access failed ({status}: {message}).",
+            };
+        }
+    }
+
+    /// <summary>What mapping the access rule needs to know about a repo: its owner, and the owner's team slugs if they could be listed.</summary>
+    private sealed record TeamContext(GitHubAccount Owner, IReadOnlySet<string>? OrgTeams);
 
     private sealed record Session(GitHubApiClient Api, string Login, AppCredentials? App) : IDisposable
     {

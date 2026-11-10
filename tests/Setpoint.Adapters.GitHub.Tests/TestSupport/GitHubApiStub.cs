@@ -100,6 +100,45 @@ internal sealed class GitHubApiStub(WireMockServer server, string token)
         return this;
     }
 
+    /// <summary>The teams with access to a repo, each with its permission.</summary>
+    public GitHubApiStub Teams(string owner, string repo, params (string Slug, string Permission)[] teams)
+    {
+        server.Given(Get($"/repos/{owner}/{repo}/teams"))
+            .RespondWith(Json(new JsonArray([.. teams.Select(t => (JsonNode)new JsonObject { ["slug"] = t.Slug, ["name"] = t.Slug, ["permission"] = t.Permission })])));
+        return this;
+    }
+
+    /// <summary>What a token that may not list a repo's teams gets: 403.</summary>
+    public GitHubApiStub TeamsForbidden(string owner, string repo)
+    {
+        server.Given(Get($"/repos/{owner}/{repo}/teams"))
+            .RespondWith(Response.Create().WithStatusCode(403).WithBody("""{"message":"Resource not accessible by personal access token"}"""));
+        return this;
+    }
+
+    /// <summary>Every team in an organization.</summary>
+    public GitHubApiStub OrgTeams(string org, params string[] slugs)
+    {
+        server.Given(Get($"/orgs/{org}/teams")).RespondWith(Json(new JsonArray([.. slugs.Select(s => (JsonNode)new JsonObject { ["slug"] = s, ["name"] = s })])));
+        return this;
+    }
+
+    /// <summary>Answers adding a repo to a team (PUT) and removing it (DELETE).</summary>
+    public GitHubApiStub TeamRepoWrites(string org, int status = 204, string? body = null)
+    {
+        foreach (string method in new[] { "PUT", "DELETE" })
+        {
+            IResponseBuilder response = Response.Create().WithStatusCode(status);
+            server.Given(Request.Create()
+                    .WithPath(new WireMock.Matchers.WildcardMatcher($"{Root}/orgs/{org}/teams/*/repos/*"))
+                    .UsingMethod(method)
+                    .WithHeader("Authorization", $"Bearer {token}"))
+                .RespondWith(body is null ? response : response.WithHeader("Content-Type", "application/json; charset=utf-8").WithBody(body));
+        }
+
+        return this;
+    }
+
     private IRequestBuilder Get(string path) => Request.Create()
         .WithPath(Root + path)
         .UsingGet()

@@ -302,7 +302,8 @@ public sealed class GitHubAdapterTests : IAsyncLifetime
             .Ruleset(Org, repo.Name, setpoint.Build())
             .BranchRules(Org, repo.Name, "main",
                 BranchRule("pull_request", setpoint.Id, """{"required_approving_review_count":2}"""),
-                BranchRule("required_status_checks", org.Id, """{"required_status_checks":[{"context":"sec-scan"}]}""", "Organization", Org));
+                BranchRule("required_status_checks", org.Id, """{"required_status_checks":[{"context":"sec-scan"}]}""", "Organization", Org))
+            .Teams(Org, repo.Name);
 
         // Act
         LiveSnapshot live = await _sut.ReadAsync(new RepoRef(TargetName, Org, repo.Name), TestContext.Current.CancellationToken);
@@ -324,7 +325,7 @@ public sealed class GitHubAdapterTests : IAsyncLifetime
     /// <summary>
     /// Given a read-only token, for which GitHub leaves bypass actors and merge flags out,
     /// when the repo is read,
-    /// then bypass actors are reported as unknown and no merge restriction is made up.
+    /// then bypass actors and team access are reported as unknown and no merge restriction is made up.
     /// </summary>
     [Fact(DisplayName = "👎 Reports bypass actors as unknown for a read-only token")]
     public async Task Read_ReadOnlyToken_ReportsBypassActorsUnknown()
@@ -333,13 +334,13 @@ public sealed class GitHubAdapterTests : IAsyncLifetime
         GitHubRepoBuilder repo = new GitHubRepoBuilder().WithOwner(Org).WithoutMergeFlags();
         RulesetBuilder setpoint = new RulesetBuilder().WithPullRequest().WithoutBypassActorsVisible();
         await DescribeWithRepoAsync(repo);
-        _api.Rulesets(Org, repo.Name, setpoint.Summary()).Ruleset(Org, repo.Name, setpoint.Build()).BranchRules(Org, repo.Name, "main");
+        _api.Rulesets(Org, repo.Name, setpoint.Summary()).Ruleset(Org, repo.Name, setpoint.Build()).BranchRules(Org, repo.Name, "main").TeamsForbidden(Org, repo.Name);
 
         // Act
         LiveSnapshot live = await _sut.ReadAsync(new RepoRef(TargetName, Org, repo.Name), TestContext.Current.CancellationToken);
 
         // Assert
-        live.UnknownRules.ShouldBe([RulesetMapper.BypassActors]);
+        live.UnknownRules.ShouldBe([RulesetMapper.BypassActors, "access", "github.access"]);
         live.Unmanaged.ShouldBeEmpty();
     }
 

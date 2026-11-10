@@ -92,6 +92,9 @@ public static class DiagnosticCodes
     /// <summary>A required check names a pipeline that doesn't exist in the repo's Azure DevOps project.</summary>
     public const string PipelineNotFound = "SP0206";
 
+    /// <summary>An <c>access</c> principal doesn't resolve on the platform, is ambiguous, or can't be given that role there.</summary>
+    public const string PrincipalNotFound = "SP0207";
+
     // 10xx: reaching targets and reading repos.
 
     /// <summary>A target can't be reached or refused the preflight, so none of its repos are planned.</summary>

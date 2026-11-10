@@ -133,6 +133,21 @@ public sealed class ObjectMapperTests
     }
 
     /// <summary>
+    /// Given a policy that names groups in access, which this build can't map on Azure DevOps,
+    /// when the policy is mapped,
+    /// then mapping fails with SP0207 instead of planning nothing, which would read as in sync.
+    /// </summary>
+    [Fact(DisplayName = "👎 Fails with SP0207 for access until groups are mapped")]
+    public void Map_Access_FailsWithSP0207()
+    {
+        // Act
+        var exception = Should.Throw<PolicyMappingException>(() => Diff(Desired(("access", """{"Contributors":"write"}""")), LiveSnapshot.Empty));
+
+        // Assert
+        exception.Code.ShouldBe(DiagnosticCodes.PrincipalNotFound);
+    }
+
+    /// <summary>
     /// Given a required check naming no pipeline, and one naming two pipelines in different folders,
     /// when the policy is mapped,
     /// then mapping fails with SP0206 naming the check.

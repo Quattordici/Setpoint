@@ -4,7 +4,8 @@ using System.Text.Json.Serialization;
 namespace Setpoint.Core.Policy.Model;
 
 /// <summary>
-/// The five neutral rules. Each means the same on every platform and applies to the repo's default branch.
+/// The neutral rules. Each means the same on every platform. The first five apply to the repo's default branch;
+/// <c>access</c> applies to the repo.
 /// A layer that sets a rule replaces the value from the layers above wholesale; lists are replaced, never appended.
 /// </summary>
 public sealed record NeutralRules
@@ -17,6 +18,7 @@ public sealed record NeutralRules
         "requireCommentResolution",
         "allowedMergeTypes",
         "protectFromForcePushAndDelete",
+        "access",
     ];
 
     /// <summary>Approvals required before a pull request can complete.</summary>
@@ -43,6 +45,31 @@ public sealed record NeutralRules
     [Description("The default branch can't be force-pushed or deleted. false removes the protection.")]
     [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingDefault)]
     public Declared<BooleanRule> ProtectFromForcePushAndDelete { get; init; }
+
+    /// <summary>
+    /// Team and group permissions on the repo: a principal name, as the platform knows it, to a role. Only the
+    /// principals listed are managed; everyone else's access is left alone. A lower layer replaces the whole map.
+    /// </summary>
+    [Description("Team and group permissions on the repo: a team slug (GitHub) or group name (Azure DevOps) to read, write, admin, or none to remove the access Setpoint manages. Principals not listed are left alone. A lower layer replaces the whole map.")]
+    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingDefault)]
+    public Declared<IReadOnlyDictionary<string, AccessRole>> Access { get; init; }
+}
+
+/// <summary>A neutral role on a repo, for the <c>access</c> rule.</summary>
+[JsonConverter(typeof(StrictStringEnumConverter<AccessRole>))]
+public enum AccessRole
+{
+    /// <summary>No access granted by Setpoint: the principal's managed access is removed.</summary>
+    None,
+
+    /// <summary>Clone and pull; on GitHub <c>pull</c>.</summary>
+    Read,
+
+    /// <summary>Push and contribute to pull requests; on GitHub <c>push</c>.</summary>
+    Write,
+
+    /// <summary>Everything, including the repo's settings and permissions.</summary>
+    Admin,
 }
 
 /// <summary>The <c>minimumReviewers</c> rule.</summary>

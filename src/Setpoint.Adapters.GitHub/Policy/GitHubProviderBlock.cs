@@ -26,6 +26,22 @@ public sealed record GitHubProviderBlock : IProviderBlock
     [Description("Who may bypass the setpoint ruleset. Nobody may unless this is declared.")]
     [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingDefault)]
     public Declared<IReadOnlyList<GitHubBypassActor>> BypassActors { get; init; }
+
+    /// <summary>GitHub-only roles for the neutral access rule: a team slug to triage or maintain.</summary>
+    [Description("GitHub-only roles for the neutral access rule: a team slug to triage or maintain. A team can't be in both access and github.access.")]
+    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingDefault)]
+    public Declared<IReadOnlyDictionary<string, GitHubTeamRole>> Access { get; init; }
+}
+
+/// <summary>A GitHub repository role with no neutral equivalent.</summary>
+[JsonConverter(typeof(StrictStringEnumConverter<GitHubTeamRole>))]
+public enum GitHubTeamRole
+{
+    /// <summary>Read, plus managing issues and pull requests without write access.</summary>
+    Triage,
+
+    /// <summary>Write, plus managing the repo without access to sensitive or destructive actions.</summary>
+    Maintain,
 }
 
 /// <summary>The <c>github.pullRequest</c> options.</summary>
