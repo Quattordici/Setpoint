@@ -103,6 +103,25 @@ internal sealed class AzureDevOpsApiClient(HttpClient http) : IDisposable
     public Task<List<AdoIdentity>?> SearchIdentitiesAsync(string filterValue, CancellationToken cancellationToken) =>
         IdentitiesAsync(Versioned($"_apis/identities?searchFilter=General&filterValue={Uri.EscapeDataString(filterValue)}&queryMembership=None"), cancellationToken);
 
+    /// <summary>Creates a policy configuration in a project from the payload, exactly as given.</summary>
+    public Task<HttpResponseMessage> CreatePolicyConfigurationAsync(string projectId, JsonObject payload, CancellationToken cancellationToken) =>
+        SendAsync(HttpMethod.Post, Versioned($"{Segment(projectId)}/_apis/policy/configurations"), payload, cancellationToken);
+
+    /// <summary>Replaces a policy configuration with the payload, exactly as given.</summary>
+    public Task<HttpResponseMessage> UpdatePolicyConfigurationAsync(string projectId, int id, JsonObject payload, CancellationToken cancellationToken) =>
+        SendAsync(HttpMethod.Put, Versioned($"{Segment(projectId)}/_apis/policy/configurations/{id}"), payload, cancellationToken);
+
+    /// <summary>Deletes a policy configuration.</summary>
+    public Task<HttpResponseMessage> DeletePolicyConfigurationAsync(string projectId, int id, CancellationToken cancellationToken) =>
+        SendAsync(HttpMethod.Delete, Versioned($"{Segment(projectId)}/_apis/policy/configurations/{id}"), null, cancellationToken);
+
+    /// <summary>
+    /// Sets access control entries on one token: the body of Access Control Entries - Set, exactly as given. With
+    /// <c>merge: false</c> each listed identity's entry is replaced and every other entry is left alone.
+    /// </summary>
+    public Task<HttpResponseMessage> SetAccessControlEntriesAsync(string namespaceId, JsonObject payload, CancellationToken cancellationToken) =>
+        SendAsync(HttpMethod.Post, Versioned($"_apis/accesscontrolentries/{Segment(namespaceId)}"), payload, cancellationToken);
+
     /// <inheritdoc />
     public void Dispose() => http.Dispose();
 
@@ -144,10 +163,18 @@ internal sealed class AzureDevOpsApiClient(HttpClient http) : IDisposable
 
     private string Versioned(string path) => $"{path}{(path.Contains('?', StringComparison.Ordinal) ? '&' : '?')}api-version={ApiVersion}";
 
-    private async Task<HttpResponseMessage> SendAsync(HttpMethod method, string path, CancellationToken cancellationToken)
+    private Task<HttpResponseMessage> SendAsync(HttpMethod method, string path, CancellationToken cancellationToken) =>
+        SendAsync(method, path, null, cancellationToken);
+
+    private async Task<HttpResponseMessage> SendAsync(HttpMethod method, string path, JsonObject? body, CancellationToken cancellationToken)
     {
         using var request = new HttpRequestMessage(method, path);
         request.Headers.Accept.ParseAdd("application/json");
+        if (body is not null)
+        {
+            request.Content = HttpJson.Content(body, AzureDevOpsApiJsonContext.Default.JsonObject);
+        }
+
         return await http.SendAsync(request, cancellationToken).ConfigureAwait(false);
     }
 

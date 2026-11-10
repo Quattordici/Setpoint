@@ -156,6 +156,27 @@ internal sealed class AzureDevOpsApiStub(WireMockServer server, string token)
         return this;
     }
 
+    /// <summary>Answers writes to a project's policy configurations: create (POST), and update or delete by id.</summary>
+    public AzureDevOpsApiStub PolicyWrites(string projectId, int status = 200, string? body = null)
+    {
+        foreach (string method in new[] { "POST", "PUT", "DELETE" })
+        {
+            string path = method == "POST" ? $"/{projectId}/_apis/policy/configurations" : $"/{projectId}/_apis/policy/configurations/*";
+            server.Given(Signed(path).UsingMethod(method).WithParam("api-version", ApiVersion))
+                .RespondWith(Write(status, body ?? (method == "DELETE" ? null : """{"id":99,"revision":1}""")));
+        }
+
+        return this;
+    }
+
+    /// <summary>Answers Access Control Entries - Set in the Git Repositories namespace.</summary>
+    public AzureDevOpsApiStub AclWrites(int status = 200, string? body = null)
+    {
+        server.Given(Signed("/_apis/accesscontrolentries/2e9eb7ed-3c0a-47d4-87c1-0ffdd275fd87").UsingPost().WithParam("api-version", ApiVersion))
+            .RespondWith(Write(status, body ?? """{"count":1,"value":[]}"""));
+        return this;
+    }
+
     /// <summary>A server that is fully reachable: signed in, released at <paramref name="releasedVersion"/>, one project with every policy type.</summary>
     public AzureDevOpsApiStub Server(string releasedVersion = "7.0")
     {
@@ -188,6 +209,12 @@ internal sealed class AzureDevOpsApiStub(WireMockServer server, string token)
         ["maxVersion"] = released == "0.0" ? "7.0" : released,
         ["releasedVersion"] = released,
     };
+
+    private static IResponseBuilder Write(int status, string? body)
+    {
+        IResponseBuilder response = Response.Create().WithStatusCode(status);
+        return body is null ? response : response.WithHeader("Content-Type", "application/json; charset=utf-8; api-version=7.0").WithBody(body);
+    }
 
     private static JsonObject List(JsonArray value) => new() { ["count"] = value.Count, ["value"] = value };
 

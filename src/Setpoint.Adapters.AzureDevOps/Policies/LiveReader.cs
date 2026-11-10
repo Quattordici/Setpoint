@@ -74,7 +74,7 @@ internal static class LiveReader
                 string[] keys = [.. match.Select(m => Key(m.Config))];
                 foreach (string rule in PolicyMapper.RulesOf(PolicyMapper.TypeId(match.First().Config)))
                 {
-                    ambiguous.Add(new AmbiguousMatch(rule, keys, $"type + branch {context.Branch}"));
+                    ambiguous.Add(new AmbiguousMatch(rule, keys, $"type + branch {context.Branch}", match.Key));
                 }
 
                 continue;

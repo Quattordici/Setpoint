@@ -44,7 +44,11 @@ public sealed record UnmanagedSetting(string Rule, string Source, JsonNode? Valu
 /// <param name="Rule">The rule.</param>
 /// <param name="ObjectKeys">The matching objects.</param>
 /// <param name="Detail">What matched, for people: <c>type + branch main</c>.</param>
-public sealed record AmbiguousMatch(string Rule, IReadOnlyList<string> ObjectKeys, string Detail);
+/// <param name="MatchKey">
+/// The match key the objects share, when there is one. Apply refuses a planned create with this match key, because
+/// several objects now match where the plan saw none.
+/// </param>
+public sealed record AmbiguousMatch(string Rule, IReadOnlyList<string> ObjectKeys, string Detail, string? MatchKey = null);
 
 /// <summary>A warning about a live setting that undercuts a rule, such as an explicit Allow that outranks a deny.</summary>
 /// <param name="Rule">The rule it undercuts. The warning is only reported when the policy sets the rule.</param>

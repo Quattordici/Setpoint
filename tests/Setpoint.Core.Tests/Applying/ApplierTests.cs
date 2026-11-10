@@ -150,6 +150,28 @@ public sealed class ApplierTests
     }
 
     /// <summary>
+    /// Given a plan that creates a setting and two matching objects that appeared live after planning,
+    /// when it is applied,
+    /// then the run is refused as stale, because an ambiguous match is never written.
+    /// </summary>
+    [Fact(DisplayName = "👎 Refuses a create when several matching objects appeared since planning")]
+    public async Task Apply_CreateTargetAppearedAmbiguous_RefusesStale()
+    {
+        // Arrange
+        FakeProviderAdapter.FakeRepo live = _adapter.AddRepo(Api).WithLive("minimumReviewers", """{ "count": 2, "resetOnPush": true }""");
+        PlanDocument plan = await PlanAsync();
+        live.Ambiguous.Add(new AmbiguousMatch("requireCommentResolution", ["fake:policy/8", "fake:policy/9"], "type + branch main", "fake:requireCommentResolution"));
+
+        // Act
+        ApplyResultSet result = await ApplyAsync(plan);
+
+        // Assert
+        result.ExitCode.ShouldBe(ExitCode.StalePlan);
+        result.Diagnostics.ShouldHaveSingleItem().Message.ShouldContain("fake:policy/8, fake:policy/9 now exist where the plan creates");
+        _adapter.Applied.ShouldBeEmpty();
+    }
+
+    /// <summary>
     /// Given a plan that updates an object which was deleted after planning,
     /// when it is applied,
     /// then the run is refused as stale.

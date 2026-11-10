@@ -50,12 +50,15 @@ internal static class ForcePushAcl
 
     /// <summary>
     /// The payload that sets one entry: the body of <c>POST _apis/accesscontrolentries/{namespace}</c> with
-    /// <c>merge: true</c>, so the entry's other bits and every other entry stay as they are.
+    /// <c>merge: false</c>. That replaces this identity's entry and leaves every other entry alone. The entry is the
+    /// live one with only the Force push bit changed, so its other bits are kept, and the plan's fingerprint makes
+    /// sure the live entry hasn't changed since. Merging can't be used: it ORs the bits in, so it could never clear
+    /// the deny when the protection is taken off.
     /// </summary>
     public static JsonObject Payload(string token, AccessControlEntry entry) => new()
     {
         ["token"] = token,
-        ["merge"] = true,
+        ["merge"] = false,
         ["accessControlEntries"] = new JsonArray((JsonNode)new JsonObject
         {
             ["descriptor"] = entry.Descriptor,

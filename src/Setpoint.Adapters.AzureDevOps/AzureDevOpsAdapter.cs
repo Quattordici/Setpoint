@@ -18,9 +18,6 @@ namespace Setpoint.Adapters.AzureDevOps;
 /// The Azure DevOps adapter, for Services and for Server 2022 and later. Setpoint finds out which one a target is,
 /// and which release of Server, from the target itself; nothing about it is declared in targets.yml.
 /// </summary>
-/// <remarks>
-/// This build reads and plans. Writing branch policies comes next, so apply writes nothing yet.
-/// </remarks>
 public sealed class AzureDevOpsAdapter : IProviderAdapter, IDisposable
 {
     private readonly AzureDevOpsAdapterOptions _options;
@@ -167,10 +164,18 @@ public sealed class AzureDevOpsAdapter : IProviderAdapter, IDisposable
             ? context
             : throw new InvalidOperationException($"The repo '{desired.Repo}' hasn't been read yet."));
 
-    /// <summary>Writes nothing: this build can't write Azure DevOps branch policies yet, so every object is refused.</summary>
-    public Task<ApplyResult> ApplyAsync(RepoRef repo, RepoChangeSet changes, CancellationToken cancellationToken) =>
-        Task.FromResult(new ApplyResult([.. changes.Objects.Select(o =>
-            new ObjectApplyOutcome(o.Key, false, "Writing Azure DevOps branch policies isn't in this build of Setpoint yet; nothing was written."))]));
+    /// <summary>
+    /// Writes one repo's planned objects as the plan holds them: policy configurations are created, replaced by id
+    /// and deleted, and the Force push entry is set on the default branch. An object that isn't about this repo's
+    /// default branch is refused without a request. The first failed write stops the repo, and the rest are reported
+    /// as not attempted.
+    /// </summary>
+    public Task<ApplyResult> ApplyAsync(RepoRef repo, RepoChangeSet changes, CancellationToken cancellationToken)
+    {
+        Session session = SessionFor(repo.Target);
+        AdoRepository listed = Listed(repo) ?? throw new InvalidOperationException($"The repo '{repo}' wasn't listed in this run.");
+        return PolicyWriter.WriteAsync(session.Api, listed, changes, cancellationToken);
+    }
 
     /// <inheritdoc />
     public void Dispose()

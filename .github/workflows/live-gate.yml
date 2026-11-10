@@ -68,7 +68,7 @@ jobs:
         run: |
           $gate = @{ Environment = '${{ matrix.environment }}' }
           if ('${{ matrix.environment }}' -eq 'ado-server') { $gate.ResetVm = $true }
-          # Azure DevOps writes land with #36. Until then set no LIVE_GATE_ADO_APPLY, and the ADO gates only plan.
+          # Azure DevOps writes landed with #36. Set LIVE_GATE_ADO_APPLY once a gate has passed by hand with writes; until then the ADO gates only plan.
           if ('${{ matrix.environment }}' -like 'ado-*' -and '${{ vars.LIVE_GATE_ADO_APPLY }}' -ne 'true') { $gate.PlanOnly = $true }
           if ('${{ github.event.inputs.record }}' -eq 'true') { $gate.Record = $true }
           ./tests/live/Invoke-LiveGate.ps1 @gate
