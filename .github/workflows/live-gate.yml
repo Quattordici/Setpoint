@@ -82,5 +82,6 @@ jobs:
             tests/live/out/**/*.txt
             tests/live/out/**/*.log
             tests/live/out/**/plan.json
+            tests/live/out/**/drift.json
             tests/live/out/**/recordings/**
           retention-days: 14

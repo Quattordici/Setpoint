@@ -34,10 +34,17 @@ If `setpoint-live` is taken as a GitHub org name, pick another and change it in 
 | `apply` | `apply plan.json` | 0 |
 | `replan-in-sync` | `plan --exit-code` again | 0: everything in sync, so apply did exactly what plan said |
 | `apply-stale-plan` | `apply plan.json` again | 3: the stale-plan guard refuses it, because the objects changed |
+| `drift-in-sync` | `drift --strict` | 0: no drift right after apply |
+| `hand-edit` | The script raises `gate-basic`'s minimum reviewer count from 1 to 3 through the platform's own API, not through Setpoint | - |
+| `drift-found` | `drift --strict --report drift.json` | 5: drift, and the report names `gate-basic` and `minimumReviewers.count` and no other repo |
+| `apply-drift-report` | `apply drift.json` | 0: the report applies like a plan and puts the count back |
+| `drift-restored` | `drift --strict` | 0: no drift again |
+
+The last five steps are **gate 3**: drift runs unattended and finds a hand edit. In the nightly workflow the drift summaries go to the run page (`GITHUB_STEP_SUMMARY`), and `drift.json` is uploaded with the rest of the output. Gate 3 passes when one nightly run is green on `github` and on `ado-cloud`; the Azure DevOps drift steps need writes, so they run once `LIVE_GATE_ADO_APPLY` is `true`.
 
 The gate policy uses every neutral rule, a group, a repo override, a removal and both provider blocks, so one run exercises every mapping. A step that doesn't exit as expected stops the run. The output folder, `tests/live/out/<environment>-<timestamp>/`, holds each step's output, the plan file, a transcript and any recordings. Git ignores it.
 
-`-PlanOnly` stops after `validate-gate` and `plan`, and accepts 0 or 5. `ado-employer` is always plan-only.
+`-PlanOnly` stops after `validate-gate`, `plan` and a read-only `drift`, and the last two accept 0 or 5. `ado-employer` is always plan-only, with no hand edit.
 
 > Until Azure DevOps writes land ([#36](https://github.com/Quattordici/Setpoint/issues/36)), `apply` writes nothing to Azure DevOps, so run the `ado-*` gates with `-PlanOnly`. The nightly workflow does that until the repository variable `LIVE_GATE_ADO_APPLY` is `true`.
 
