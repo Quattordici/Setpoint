@@ -12,9 +12,9 @@ public sealed class SetpointCliTests
     /// <summary>
     /// Given the setpoint command,
     /// when it is run with --help,
-    /// then the help lists the validate, plan and apply commands and the run succeeds.
+    /// then the help lists the validate, plan, drift and apply commands and the run succeeds.
     /// </summary>
-    [Fact(DisplayName = "👍 Root help lists validate, plan and apply")]
+    [Fact(DisplayName = "👍 Root help lists validate, plan, drift and apply")]
     public async Task RunAsync_RootHelp_ListsAllCommands()
     {
         // Arrange
@@ -27,6 +27,7 @@ public sealed class SetpointCliTests
         run.ExitCode.ShouldBe(ExitCode.Success);
         run.Out.ShouldContain("validate");
         run.Out.ShouldContain("plan");
+        run.Out.ShouldContain("drift");
         run.Out.ShouldContain("apply");
     }
 
@@ -39,6 +40,7 @@ public sealed class SetpointCliTests
     [InlineData("validate", "--policy")]
     [InlineData("plan", "--exit-code")]
     [InlineData("apply", "--max-changes")]
+    [InlineData("drift", "--report")]
     public async Task RunAsync_CommandHelp_ShowsCommandOptions(string command, string expectedOption)
     {
         // Arrange
