@@ -13,6 +13,7 @@ Declare pull-request rules once in YAML, in a central policy repo, and Setpoint 
 | [Getting started](docs/getting-started.md) | A first policy repo, `validate`, `plan` and `apply` |
 | [Permissions](docs/permissions.md) | The token scopes and the roles or ACLs each command needs, per platform and sign-in method |
 | [Pipelines](docs/pipelines.md) | Two-stage Azure Pipelines and GitHub Actions examples: plan read-only, apply behind an approval |
+| [Drift](docs/drift.md) | `setpoint drift`, its exit codes, and the scheduled drift pipelines |
 | [Diagnostics and exit codes](docs/diagnostics.md) | Every `SPxxxx` code and exit code, and what to do about it |
 | [GitHub](docs/github.md), [Azure DevOps](docs/azure-devops.md) | How each platform is mapped, listed and written |
 | [Plan files](docs/plan-file.md) | The `plan.json` format |

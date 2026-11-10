@@ -1,0 +1,67 @@
+# Setpoint drift check in GitHub Actions: a scheduled, read-only run that fails when live state no longer
+# matches the policy on main, so GitHub's failed-workflow notifications tell the platform team.
+# Put this file in the policy repo as .github/workflows/setpoint-drift.yml.
+# See docs/drift.md for what it checks and docs/pipelines.md for the environment it reads.
+
+name: Setpoint drift
+
+on:
+  schedule:
+    - cron: "0 5 * * 1-5"         # weekday mornings, UTC; scheduled runs use the default branch
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: setpoint-drift
+  cancel-in-progress: true
+
+env:
+  # Pin the same version as the plan/apply workflow, so a drift report can be applied there.
+  SETPOINT_VERSION: 0.1.0-alpha
+  DOTNET_NOLOGO: true
+
+jobs:
+  drift:
+    runs-on: ubuntu-latest
+    # Read-only secrets only: the same environment the plan job uses.
+    environment: setpoint-plan
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: 10.0.x
+
+      - name: Install Setpoint
+        run: dotnet tool install Setpoint --version "$SETPOINT_VERSION" --tool-path "$RUNNER_TEMP/setpoint"
+
+      - name: Validate
+        run: '"$RUNNER_TEMP/setpoint/setpoint" validate --strict'
+
+      # drift exits 5 when anything differs from the policy, 1 when a target or repo couldn't be read,
+      # and 2 for an invalid policy. Any of them fails the run. The summary shows on the run page.
+      - name: Check for drift
+        env:
+          SETPOINT_GITHUB_TOKEN: ${{ secrets.SETPOINT_GITHUB_TOKEN }}
+          SETPOINT_ADO_TOKEN: ${{ secrets.SETPOINT_ADO_TOKEN }}
+        run: |
+          set +e
+          "$RUNNER_TEMP/setpoint/setpoint" drift --strict --report drift.json --summary "$GITHUB_STEP_SUMMARY"
+          code=$?
+          set -e
+          if [ "$code" -eq 5 ]; then
+            echo "::error title=Drift found::Live state differs from the policy on main. See the Setpoint drift summary."
+          fi
+          exit "$code"
+
+      # Keep the report even when the check fails: it is the record of what drifted. After review,
+      # 'setpoint apply drift.json' from the apply side puts it back (see docs/drift.md).
+      - name: Publish the drift report
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: drift
+          path: drift.json
+          if-no-files-found: ignore

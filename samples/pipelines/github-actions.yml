@@ -7,8 +7,6 @@ on:
   pull_request:
   push:
     branches: [main]
-  schedule:
-    - cron: "0 5 * * 1-5"         # also re-plan on weekday mornings, to catch drift
   workflow_dispatch:
 
 permissions:
