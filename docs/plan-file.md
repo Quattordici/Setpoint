@@ -1,6 +1,6 @@
 # Plan files
 
-`setpoint plan --out plan.json` saves a plan, and `setpoint apply plan.json` applies it. `setpoint plan --json` prints the same document to standard output. The schema is [`schema/v1/plan.json`](../schema/v1/plan.json), generated from the C# model; run the tests with `SETPOINT_UPDATE_SCHEMA=1` to regenerate it.
+`setpoint plan --out plan.json` saves a plan, and `setpoint apply plan.json` applies it. `setpoint plan --json` prints the same document to standard output. `setpoint drift --report drift.json` and `drift --json` write a drift report in the same format, so a reviewed drift report can be applied like any plan. The schema is [`schema/v1/plan.json`](../schema/v1/plan.json), generated from the C# model; run the tests with `SETPOINT_UPDATE_SCHEMA=1` to regenerate it.
 
 A plan never holds a secret. Targets record their sign-in method (`auth`) and identity, never a token.
 

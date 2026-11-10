@@ -165,6 +165,70 @@ public sealed class PlanRendererTests
         _out.Output.ShouldBeEmpty();
     }
 
+    /// <summary>
+    /// Given the sample plan,
+    /// when it is rendered as a tree in the drift view,
+    /// then it reads as drift: the header, the repo status, the summary panel and a closing verdict, with no change limit.
+    /// </summary>
+    [Fact(DisplayName = "👍 The drift view reads as differences and ends with a verdict")]
+    public void Tree_DriftView_ReadsAsDrift()
+    {
+        // Act
+        PlanRenderer.Write(Console, Sample(), OutputFormat.Tree, verbose: false, savedTo: "/tmp/drift.json", PlanView.Drift);
+
+        // Assert
+        string output = _out.Output;
+        output.ShouldContain("Setpoint 0.1.0-alpha · drift · policy 3f9c2a1");
+        output.ShouldContain("2 differences");
+        output.ShouldContain("1 drifted, 2 in sync, 1 skipped");
+        output.ShouldContain("To restore");
+        output.ShouldContain("/tmp/drift.json  → review it, then setpoint apply drift.json to restore");
+        output.ShouldContain("Drift found: 1 of 3 repos differ from the policy.");
+        output.ShouldNotContain("max-changes");
+        output.ShouldNotContain("to change");
+    }
+
+    /// <summary>
+    /// Given the sample plan,
+    /// when it is rendered plain in the drift view,
+    /// then the header and summary say drift, the change limit is left out, and the last line is the verdict.
+    /// </summary>
+    [Fact(DisplayName = "👍 Plain drift output ends with the verdict line")]
+    public void Plain_DriftView_EndsWithVerdict()
+    {
+        // Act
+        PlanRenderer.Write(Console, Sample(), OutputFormat.Plain, verbose: false, savedTo: "drift.json", PlanView.Drift);
+
+        // Assert
+        string[] lines = _plain.ToString().Split(['\r', '\n'], StringSplitOptions.RemoveEmptyEntries);
+        lines.ShouldContain("setpoint 0.1.0-alpha drift policy=3f9c2a1 files=5 repos=4");
+        lines.ShouldContain("summary repos_drifted=1 create=1 update=1 remove=0 in_sync=2 skipped=1 failed=0 unmanaged=3 warnings=2");
+        lines.ShouldContain("report saved to drift.json");
+        lines[^1].ShouldBe("Drift found: 1 of 3 repos differ from the policy.");
+    }
+
+    /// <summary>
+    /// Given an in-sync plan, and one where a repo couldn't be read,
+    /// when the drift verdict is made,
+    /// then the first says there is no drift and the second says the check failed, because unread repos can hide drift.
+    /// </summary>
+    [Fact(DisplayName = "👎 The drift verdict fails when a repo couldn't be read")]
+    public void DriftVerdict_ReadFailure_Fails()
+    {
+        // Arrange
+        PlanDocument sample = Sample();
+        PlanDocument inSync = sample with { Summary = sample.Summary with { ReposChanged = 0, InSync = 3 } };
+        PlanDocument failed = sample with { Summary = sample.Summary with { Errors = 1 } };
+
+        // Act
+        string inSyncVerdict = PlanRenderer.DriftVerdict(inSync);
+        string failedVerdict = PlanRenderer.DriftVerdict(failed);
+
+        // Assert
+        inSyncVerdict.ShouldBe("No drift: 3 repos match the policy.");
+        failedVerdict.ShouldBe("Drift check failed with 1 error, so some drift may not be shown. 1 repo drifted among those that were read.");
+    }
+
     private static PlanDocument Sample() => new()
     {
         FormatVersion = 1,

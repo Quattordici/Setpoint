@@ -21,6 +21,6 @@ public enum ExitCode
     /// <summary>A safety guard tripped, such as <c>--max-changes</c>.</summary>
     GuardTripped = 4,
 
-    /// <summary><c>plan --exit-code</c> found changes.</summary>
+    /// <summary><c>plan --exit-code</c> found changes, or <c>drift</c> found live state that differs from the policy.</summary>
     ChangesFound = 5,
 }

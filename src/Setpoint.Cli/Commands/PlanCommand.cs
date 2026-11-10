@@ -4,10 +4,6 @@ using Setpoint.Cli.Rendering;
 using Setpoint.Core;
 using Setpoint.Core.Diagnostics;
 using Setpoint.Core.Planning;
-using Setpoint.Core.Policy.Loading;
-using Setpoint.Core.Providers;
-using Setpoint.Http;
-using Spectre.Console;
 
 namespace Setpoint.Cli.Commands;
 
@@ -73,34 +69,15 @@ internal static class PlanCommand
     internal static async Task<ExitCode> RunAsync(CliConsole console, CliServices services, PlanArguments arguments, CancellationToken cancellationToken)
     {
         // With --json, standard output carries only the plan, so everything else goes to standard error.
-        bool toError = arguments.Json;
-        (PolicyLoadResult load, IReadOnlyList<Diagnostic> policyDiagnostics) = PolicyGate.Check(arguments.Policy, arguments.Options.Strict);
-        if (load.Repo is null || policyDiagnostics.HasErrors())
+        PlanRunResult run = await PlanRun.RunAsync(
+            console, services, arguments.Policy, arguments.Options, arguments.Record, arguments.Format, toError: arguments.Json, cancellationToken);
+        if (run.Result is not { } result)
         {
-            DiagnosticRenderer.Write(console, policyDiagnostics, arguments.Format, toError);
-            console.ErrorWriter.WriteLine("The policy is invalid, so no target was contacted. Run 'setpoint validate' for details.");
             return ExitCode.InvalidPolicyOrUsage;
         }
 
-        IReadOnlyList<IProviderAdapter> adapters = services.CreateAdapters(new AdapterSettings(
-            new HttpCoreOptions { RecordDirectory = arguments.Record?.FullName },
-            arguments.Options.AllowUnsupportedServer));
-        PlanResult result;
-        try
-        {
-            var planner = new Planner(adapters, ProviderBlocks.All, services.Time);
-            var input = new PlanInput(load.Repo, load.Sources, PolicyCommit.Find(arguments.Policy.FullName));
-            result = await planner.PlanAsync(input, arguments.Options, cancellationToken);
-        }
-        finally
-        {
-            foreach (IDisposable adapter in adapters.OfType<IDisposable>())
-            {
-                adapter.Dispose();
-            }
-        }
-
-        IReadOnlyList<Diagnostic> diagnostics = [.. policyDiagnostics, .. result.Diagnostics];
+        IReadOnlyList<Diagnostic> policyDiagnostics = run.PolicyDiagnostics;
+        IReadOnlyList<Diagnostic> diagnostics = run.Diagnostics;
         bool hasErrors = diagnostics.HasErrors();
 
         string? savedTo = null;
@@ -134,16 +111,10 @@ internal static class PlanCommand
             PlanRenderer.Write(console, result.Document, arguments.Format, arguments.Verbose, savedTo);
         }
 
-        return hasErrors ? ErrorExitCode(diagnostics)
+        return hasErrors ? PlanRun.ErrorExitCode(diagnostics)
             : arguments.ExitCode && result.Document.HasChanges ? ExitCode.ChangesFound
             : ExitCode.Success;
     }
-
-    // Problems with the policy or the selectors exit 2, like validate; problems reaching or reading live state exit 1.
-    private static ExitCode ErrorExitCode(IEnumerable<Diagnostic> diagnostics) =>
-        diagnostics.Any(d => d.Severity == DiagnosticSeverity.Error && d.Code[2] == '0')
-            ? ExitCode.InvalidPolicyOrUsage
-            : ExitCode.RuntimeFailure;
 }
 
 /// <summary>The parsed arguments of <c>setpoint plan</c>.</summary>

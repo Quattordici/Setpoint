@@ -58,9 +58,9 @@ Pipelines branch on these, so they never change once released.
 
 | Code | Meaning | What to do |
 |---|---|---|
-| 0 | Success. `plan` found nothing to change, or found changes without `--exit-code`; `apply` wrote everything. | None. |
-| 1 | Runtime failure: an unreachable target (`SP1001`), a repo that couldn't be read (`SP1002`), a failed write (`SP1003`), or any other error outside the 01xx and 02xx ranges, including a warning that `--strict` made an error. | Read the diagnostics. After a partial apply, plan again: repos already applied show as in sync. |
+| 0 | Success. `plan` found nothing to change, or found changes without `--exit-code`; `drift` found no drift; `apply` wrote everything. | None. |
+| 1 | Runtime failure: an unreachable target (`SP1001`) unless `--skip-unreachable` is given, so `drift` can't hide drift behind it, a repo that couldn't be read (`SP1002`), a failed write (`SP1003`), or any other error outside the 01xx and 02xx ranges, including a warning that `--strict` made an error. | Read the diagnostics. After a partial apply, plan again: repos already applied show as in sync. |
 | 2 | The policy is invalid, or the command line is wrong: any error in the 01xx or 02xx ranges, which includes everything `validate` catches. | Run `setpoint validate` and fix each reported line. |
 | 3 | The plan is stale (`SP4001`). apply wrote nothing. | Plan again and apply the new plan. |
 | 4 | A guard tripped: more repos would change than `--max-changes` allows (`SP4002`). apply wrote nothing. | Check the plan is intended, then raise `--max-changes`. |
-| 5 | `plan --exit-code` found changes. | Apply the plan. A pipeline uses this to decide whether an apply stage is needed; see [pipelines.md](pipelines.md). |
+| 5 | `plan --exit-code` found changes, or `drift` found live state that differs from the policy. | Apply the plan. A pipeline uses this to decide whether an apply stage is needed; see [pipelines.md](pipelines.md). For drift, review the report and apply it, or plan and apply as usual. |

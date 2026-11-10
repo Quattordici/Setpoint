@@ -24,6 +24,7 @@ Declare pull-request rules once in YAML, in a central policy repo, and Setpoint 
 |---|---|
 | `setpoint validate` | Offline checks of the policy repo against the schema and merge rules |
 | `setpoint plan [--out plan.json] [--json] [--exit-code]` | Reads live state and shows the changes apply would make |
+| `setpoint drift [--report drift.json] [--json]` | Checks that live state still matches the policy; exits 5 when it doesn't |
 | `setpoint apply plan.json` | Applies a saved plan, after checking nothing moved since it was made |
 | `setpoint apply --yes` | Re-plans and applies in one step |
 
@@ -46,6 +47,16 @@ apply: repos applied=1 failed=1 not_attempted=0 skipped=0 objects_written=2
 ```
 
 The plan file format is described in [docs/plan-file.md](docs/plan-file.md).
+
+## Checking for drift
+
+`setpoint drift` plans exactly like `plan` and never writes. It is meant for a scheduled pipeline:
+
+- It exits 0 when every repo in scope matches the policy, and 5 when any repo differs.
+- It exits 1 when a target can't be reached or a repo can't be read, because what wasn't read could be hiding drift. `--skip-unreachable` leaves an unreachable target out with a warning instead.
+- `--report drift.json` saves the report, and `--json` prints it. The report is a plan file, so after review `setpoint apply drift.json` puts the drifted settings back, with the same checks as any apply. A report from a run with errors is incomplete: plan again before applying.
+
+Setpoint keeps no state, so drift can't tell a setting someone changed by hand from a policy change that hasn't been applied yet. Run it against the policy as it is on `main`, where every merged change is expected to be applied.
 
 ## Diagnostics
 
