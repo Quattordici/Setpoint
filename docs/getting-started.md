@@ -141,5 +141,6 @@ Run `setpoint plan` again afterwards and the applied repos show as in sync.
 ## Next
 
 - Run it from a pipeline, with a read-only plan stage and an approved apply stage: [pipelines.md](pipelines.md).
+- Check for drift every weekday morning from a scheduled pipeline: [drift.md](drift.md).
 - The plan file format, for reports and tooling: [plan-file.md](plan-file.md).
 - Every exit code and diagnostic: [diagnostics.md](diagnostics.md).

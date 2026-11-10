@@ -9,7 +9,8 @@ namespace Setpoint.Cli.Tests.Docs;
 
 /// <summary>
 /// Keeps the getting-started guide and the samples it points at honest: the sample policy repo validates, the
-/// pinned Setpoint version is the one being built, and the sample pipelines set every token the sample targets read.
+/// pinned Setpoint version is the one being built, the sample pipelines set every token the sample targets read,
+/// and the drift pipelines run on a schedule with read-only secrets only.
 /// </summary>
 public sealed partial class SamplesTests
 {
@@ -45,6 +46,8 @@ public sealed partial class SamplesTests
     [InlineData("docs/getting-started.md")]
     [InlineData("samples/pipelines/azure-pipelines.yml")]
     [InlineData("samples/pipelines/github-actions.yml")]
+    [InlineData("samples/pipelines/drift-azure-pipelines.yml")]
+    [InlineData("samples/pipelines/drift-github-actions.yml")]
     public void PinnedVersion_DocsAndSamples_MatchCurrentVersion(string file)
     {
         // Arrange
@@ -78,6 +81,62 @@ public sealed partial class SamplesTests
 
         // Assert
         mappings.ShouldAllBe(m => m.Value == 2, $"{file} must map each token variable once in the plan step and once in the apply step.");
+    }
+
+    /// <summary>
+    /// Given the sample policy repo's targets,
+    /// when the drift pipelines are read,
+    /// then each maps every target's token once, from the read-only secrets, and never names a write secret.
+    /// </summary>
+    [Theory(DisplayName = "🛡️ Drift pipelines set every token once, from read-only secrets only")]
+    [InlineData("samples/pipelines/drift-azure-pipelines.yml", "setpoint-plan", "setpoint-apply")]
+    [InlineData("samples/pipelines/drift-github-actions.yml", "setpoint-plan", "setpoint-apply")]
+    public void DriftPipelines_Tokens_ReadOnly(string file, string readOnlySecrets, string writeSecretsMarker)
+    {
+        // Arrange
+        PolicyLoadResult load = new PolicyRepoLoader(ProviderBlocks.All).LoadDirectory(s_policyRepo);
+        string[] variables = [.. load.Repo!.Targets.Content.Targets.Select(t => TargetCredentials.TokenVariable(new Target(t.Key, t.Value)))];
+        string text = File.ReadAllText(Path.Combine(s_root, file));
+
+        // Act
+        Dictionary<string, int> mappings = variables.ToDictionary(v => v, v => Regex.Matches(text, $@"^\s+{v}:", RegexOptions.Multiline).Count);
+
+        // Assert
+        mappings.ShouldAllBe(m => m.Value == 1, $"{file} must map each token variable once, in the drift step.");
+        text.ShouldContain(readOnlySecrets);
+        text.ShouldNotContain(writeSecretsMarker, Case.Sensitive);
+        text.ShouldNotContain("ApplyToken", Case.Sensitive);
+    }
+
+    /// <summary>
+    /// Given the sample pipelines,
+    /// when their triggers and drift steps are read,
+    /// then only the drift pipelines are scheduled, and they run drift with --strict, --report and --summary
+    /// and publish the report even when the check fails.
+    /// </summary>
+    [Theory(DisplayName = "👍 Only the drift pipelines are scheduled, and they keep the report")]
+    [InlineData("samples/pipelines/azure-pipelines.yml", false)]
+    [InlineData("samples/pipelines/github-actions.yml", false)]
+    [InlineData("samples/pipelines/drift-azure-pipelines.yml", true)]
+    [InlineData("samples/pipelines/drift-github-actions.yml", true)]
+    public void Pipelines_Schedule_OnlyDrift(string file, bool drift)
+    {
+        // Arrange
+        string text = File.ReadAllText(Path.Combine(s_root, file));
+
+        // Act
+        bool scheduled = Regex.IsMatch(text, @"^\s*-?\s*cron:", RegexOptions.Multiline);
+
+        // Assert
+        scheduled.ShouldBe(drift, $"{file}: drift checks belong in the drift pipelines.");
+        if (drift)
+        {
+            text.ShouldContain(" drift --strict ");
+            text.ShouldContain("--report");
+            text.ShouldContain("--summary");
+            text.ShouldMatch(@"(condition: always\(\)|if: always\(\))");
+            text.Split('\n').Where(l => !l.TrimStart().StartsWith('#')).ShouldNotContain(l => l.Contains(" apply ", StringComparison.Ordinal), "a drift pipeline never applies.");
+        }
     }
 
     private static string RepoRoot()
