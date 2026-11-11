@@ -64,8 +64,9 @@ public sealed class AzureDevOpsAdapterTests : IAsyncLifetime
     /// then each is named after its Server release and still gets the pinned API version.
     /// </summary>
     [Theory(DisplayName = "👍 Detects the Server release from the REST version it has released")]
-    [InlineData("7.1", "Azure DevOps Server 2022.1")]
-    [InlineData("7.2", "Azure DevOps Server (REST 7.2)")]
+    [InlineData("7.1", "Azure DevOps Server 2022.1 or 2022.2")]
+    [InlineData("7.2", "Azure DevOps Server (2025)")]
+    [InlineData("7.3", "Azure DevOps Server (REST 7.3)")]
     public async Task Describe_NewerServer_NamesReleaseAndPins70(string released, string expected)
     {
         // Arrange

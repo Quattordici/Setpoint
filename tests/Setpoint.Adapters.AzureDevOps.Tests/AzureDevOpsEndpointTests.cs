@@ -134,8 +134,10 @@ public sealed class AzureDevOpsEndpointTests
     /// then it is the Server release that shipped it.
     /// </summary>
     [Theory(DisplayName = "👍 Names the Server release a REST version belongs to")]
-    [InlineData(7, 2, "Azure DevOps Server (REST 7.2)")]
-    [InlineData(7, 1, "Azure DevOps Server 2022.1")]
+    [InlineData(7, 3, "Azure DevOps Server (REST 7.3)")]
+    [InlineData(8, 0, "Azure DevOps Server (REST 8.0)")]
+    [InlineData(7, 2, "Azure DevOps Server (2025)")]
+    [InlineData(7, 1, "Azure DevOps Server 2022.1 or 2022.2")]
     [InlineData(7, 0, "Azure DevOps Server 2022")]
     [InlineData(6, 0, "Azure DevOps Server 2020")]
     [InlineData(5, 1, "Azure DevOps Server 2019")]

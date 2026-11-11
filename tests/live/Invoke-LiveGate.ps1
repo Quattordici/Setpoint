@@ -33,6 +33,11 @@
     Also record every HTTP exchange, redacted, as WireMock.Net mappings, under out/.../recordings/<step>/.
     Not allowed with ado-employer.
 
+.PARAMETER Server
+    ado-server only: which Azure DevOps Server release to run on, as listed in servers.psd1 (2022, 2022.1, 2022.2,
+    2025), or several. Each gets its own run and output folder. The plan step also checks that the preflight names
+    the release as servers.psd1 expects. Defaults to 2022.
+
 .PARAMETER ResetVm
     ado-server only: restore the VM's Hyper-V checkpoint and wait for Azure DevOps to answer before the run.
 
@@ -58,6 +63,11 @@
     ./tests/live/Invoke-LiveGate.ps1 -Environment ado-server -ResetVm -Record
 
 .EXAMPLE
+    # Every Server release in turn. Each VM has its own PAT, so set SETPOINT_LIVE_TOKEN_<release> for each, such
+    # as SETPOINT_LIVE_TOKEN_2022_1; SETPOINT_LIVE_TOKEN is used for a release without one.
+    ./tests/live/Invoke-LiveGate.ps1 -Environment ado-server -Server 2022, 2022.1, 2022.2, 2025 -ResetVm
+
+.EXAMPLE
     $env:SETPOINT_LIVE_TOKEN = '<read-only PAT: Code (read), Build (read)>'
     ./tests/live/Invoke-LiveGate.ps1 -Environment ado-employer -EmployerUrl https://tfs.example.com/DefaultCollection -EmployerScope 'Platform/*'
 #>
@@ -66,6 +76,9 @@ param(
     [Parameter(Mandatory)]
     [ValidateSet('github', 'ado-cloud', 'ado-server', 'ado-employer')]
     [string] $Environment,
+
+    [ValidateSet('2022', '2022.1', '2022.2', '2025')]
+    [string[]] $Server = @('2022'),
 
     [switch] $Record,
 
@@ -79,8 +92,8 @@ param(
 
     [string[]] $EmployerScope,
 
-    # Hyper-V names for -ResetVm.
-    [string] $VmName = 'setpoint-ado',
+    # Hyper-V names for -ResetVm. The VM comes from servers.psd1 unless given.
+    [string] $VmName,
     [string] $CheckpointName = 'clean',
     [int] $VmReadyTimeoutSeconds = 900
 )
@@ -89,9 +102,38 @@ Set-StrictMode -Version Latest
 $ErrorActionPreference = 'Stop'
 
 $liveRoot = $PSScriptRoot
+
+# Several Server releases: run the gate once per release, each in its own process, and fail if any failed.
+if ($Environment -eq 'ado-server' -and $Server.Count -gt 1) {
+    $failed = @()
+    foreach ($release in $Server) {
+        $arguments = @{} + $PSBoundParameters
+        $arguments.Server = @($release)
+        & $PSCommandPath @arguments
+        if ($LASTEXITCODE -ne 0) { $failed += $release }
+    }
+    if ($failed) {
+        Write-Host "`nLive gate ado-server FAILED on: $($failed -join ', ')" -ForegroundColor Red
+        exit 1
+    }
+    Write-Host "`nLive gate ado-server passed on: $($Server -join ', ')" -ForegroundColor Green
+    exit 0
+}
+
+$release = $null
+if ($Environment -eq 'ado-server') {
+    $release = (Import-PowerShellDataFile (Join-Path $liveRoot 'servers.psd1'))[$Server[0]]
+    if (-not $VmName) { $VmName = $release.VmName }
+    # A token for this release wins over the shared one, because each VM has its own PAT.
+    $releaseToken = [Environment]::GetEnvironmentVariable("SETPOINT_LIVE_TOKEN_$($Server[0].Replace('.', '_'))")
+    if ($releaseToken) { $env:SETPOINT_LIVE_TOKEN = $releaseToken }
+} elseif ($PSBoundParameters.ContainsKey('Server')) {
+    throw '-Server only applies to ado-server.'
+}
 $repoRoot = (Resolve-Path (Join-Path $liveRoot '../..')).Path
 $stamp = Get-Date -Format 'yyyyMMdd-HHmmss'
-$out = Join-Path $liveRoot "out/$Environment-$stamp"
+$label = $release ? "$Environment-$($Server[0])" : $Environment
+$out = Join-Path $liveRoot "out/$label-$stamp"
 New-Item -ItemType Directory -Path $out -Force | Out-Null
 $transcript = Join-Path $out 'gate.log'
 $failures = [System.Collections.Generic.List[string]]::new()
@@ -126,6 +168,11 @@ function New-PolicyRepo([string] $policy, [string] $targetsText) {
 }
 
 function Get-TargetsText {
+    if ($Environment -eq 'ado-server') {
+        $text = Get-Content -Raw (Join-Path $liveRoot 'targets/ado-server.yml')
+        return [regex]::Replace($text, '(?m)^(\s*url:\s*)\S+', { param($m) $m.Groups[1].Value + $release.Url })
+    }
+
     if ($Environment -ne 'ado-employer') {
         return Get-Content -Raw (Join-Path $liveRoot "targets/$Environment.yml")
     }
@@ -225,6 +272,16 @@ function Assert-DriftReport([string] $report) {
     Write-Host 'ok: the drift report names gate-basic minimumReviewers.count, and nothing else' -ForegroundColor Green
 }
 
+# Fails the run unless the plan names the Server release the way servers.psd1 expects, so a wrong preflight shows.
+function Assert-Detected([string] $planFile) {
+    if (-not $release) { return }
+    $detected = @((Get-Content -Raw $planFile | ConvertFrom-Json).targets | ForEach-Object { $_.detected })
+    if ($detected -notcontains $release.Detected) {
+        throw "The preflight named the server '$($detected -join ', ')', expected '$($release.Detected)' for Server $($Server[0])."
+    }
+    Write-Host "ok: detected $($release.Detected)" -ForegroundColor Green
+}
+
 function Reset-ExpressVm {
     Write-Step "Restore Hyper-V checkpoint '$CheckpointName' on VM '$VmName'"
     if (-not $IsWindows) { throw '-ResetVm needs Hyper-V on Windows.' }
@@ -232,7 +289,7 @@ function Reset-ExpressVm {
     Restore-VMCheckpoint -VMName $VmName -Name $CheckpointName -Confirm:$false
     Start-VM -Name $VmName -ErrorAction SilentlyContinue
 
-    $url = ([regex]::Match((Get-Content -Raw (Join-Path $liveRoot 'targets/ado-server.yml')), 'url:\s*(\S+)')).Groups[1].Value
+    $url = $release.Url
     $probe = "$($url.TrimEnd('/'))/_apis/connectionData"
     $auth = 'Basic ' + [Convert]::ToBase64String([Text.Encoding]::ASCII.GetBytes(":$env:SETPOINT_LIVE_TOKEN"))
     $deadline = (Get-Date).AddSeconds($VmReadyTimeoutSeconds)
@@ -285,6 +342,7 @@ try {
         $gate = New-PolicyRepo 'gate' $targets
         Invoke-Setpoint 'validate-gate' @(0) @('validate', '--policy', $gate, '--strict') | Out-Null
         Invoke-Setpoint 'plan' @(0, 5) @('plan', '--policy', $gate, '--out', $plan, '--exit-code') | Out-Null
+        Assert-Detected $plan
         Invoke-Setpoint 'drift' @(0, 5) (@('drift', '--policy', $gate, '--report', $drift) + @(Get-SummaryArguments)) | Out-Null
     } elseif ($Environment -eq 'ado-employer') {
         # Plan only, with the baseline alone: the gate's group and override name repos that only exist in the
@@ -313,6 +371,7 @@ try {
 
         $firstPlan = $SkipReset ? @(0, 5) : @(5)
         Invoke-Setpoint 'plan' $firstPlan @('plan', '--policy', $gate, '--out', $plan, '--exit-code') | Out-Null
+        Assert-Detected $plan
         Invoke-Setpoint 'apply' @(0) @('apply', $plan, '--policy', $gate) | Out-Null
         Invoke-Setpoint 'replan-in-sync' @(0) @('plan', '--policy', $gate, '--exit-code') | Out-Null
         Invoke-Setpoint 'apply-stale-plan' @(3) @('apply', $plan, '--policy', $gate) | Out-Null
@@ -336,11 +395,11 @@ try {
 
 Write-Host ''
 if ($failures.Count -gt 0) {
-    Write-Host "Live gate $Environment FAILED ($($failures.Count)):" -ForegroundColor Red
+    Write-Host "Live gate $label FAILED ($($failures.Count)):" -ForegroundColor Red
     $failures | ForEach-Object { Write-Host "  - $_" -ForegroundColor Red }
     Write-Host "Output: $out"
     exit 1
 }
 
-Write-Host "Live gate $Environment passed. Output: $out" -ForegroundColor Green
+Write-Host "Live gate $label passed. Output: $out" -ForegroundColor Green
 exit 0

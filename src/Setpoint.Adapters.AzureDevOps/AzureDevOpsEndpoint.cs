@@ -100,11 +100,15 @@ internal static class AzureDevOpsEndpoint
             .DefaultIfEmpty()
             .Max();
 
-    /// <summary>The Server release a released REST version belongs to, from Microsoft's version mapping.</summary>
+    /// <summary>
+    /// The Server release a released REST version belongs to, from Microsoft's version mapping. 2022.2 is an update
+    /// to 2022.1 and released no new REST version, so the two read the same.
+    /// </summary>
     public static string ServerName(Version released) => released switch
     {
-        { Major: > 7 } or { Major: 7, Minor: >= 2 } => $"Azure DevOps Server (REST {Format(released)})",
-        { Major: 7, Minor: 1 } => "Azure DevOps Server 2022.1",
+        { Major: > 7 } or { Major: 7, Minor: > 2 } => $"Azure DevOps Server (REST {Format(released)})",
+        { Major: 7, Minor: 2 } => "Azure DevOps Server (2025)",
+        { Major: 7, Minor: 1 } => "Azure DevOps Server 2022.1 or 2022.2",
         { Major: 7 } => "Azure DevOps Server 2022",
         { Major: 6 } => "Azure DevOps Server 2020",
         { Major: 5 } => "Azure DevOps Server 2019",
