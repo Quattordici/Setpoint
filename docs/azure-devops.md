@@ -1,6 +1,6 @@
 # Azure DevOps
 
-Setpoint manages Azure DevOps Services organizations and Azure DevOps Server 2022 (and later) collections. This page grows with the adapter. This build plans with every sign-in method: it reads branch policies and the default branch's Force push entries and shows the changes. Writing them comes next, so `apply` writes nothing to Azure DevOps yet.
+Setpoint manages Azure DevOps Services organizations and Azure DevOps Server 2022 (and later) collections. It plans and applies with every sign-in method: it reads branch policies and the default branch's Force push entries, shows the changes, and `apply` writes them.
 
 ## Targets
 
@@ -78,6 +78,24 @@ Rules apply to each repo's default branch. Setpoint owns a policy configuration 
 
 Policies are read with the project-wide `GET {project}/_apis/policy/configurations`, which is released at 7.0, and filtered by scope in Setpoint. A project's policies, pipelines and Project Valid Users group are read once per run, however many of its repos are planned.
 
+## Applying
+
+`apply` writes each repo's planned objects in plan order, sending each payload exactly as the plan file holds it:
+
+| Planned | Request |
+| --- | --- |
+| Create a policy | `POST {project}/_apis/policy/configurations` |
+| Update a policy | `PUT {project}/_apis/policy/configurations/{id}`, the whole configuration. Settings Setpoint doesn't manage were copied from the live policy at plan time, and the plan's fingerprint makes sure they haven't changed since |
+| Delete a policy | `DELETE {project}/_apis/policy/configurations/{id}` |
+| Force push entry | `POST _apis/accesscontrolentries/2e9eb7ed-3c0a-47d4-87c1-0ffdd275fd87` with `merge: false`, which replaces Project Valid Users' entry on the default branch's token and leaves every other entry alone. The entry is the live one with only the Force push bit changed. Merging can't be used, because it ORs bits in and could never take the deny off |
+
+- Before sending anything, Setpoint checks that the object is about this repo's default branch: a policy must be scoped to exactly that branch, and the Force push entry must be on its token. Anything else in a plan file is refused without a request.
+- A create is refused as stale (exit 3) when an object with the same match now exists, or when several do, so an ambiguous match is never written.
+- The first failed write stops that repo, and its later objects aren't attempted. Other repos carry on unless `--fail-fast` is set.
+- A 401 or 403 names what is missing: for policies, Code (read & write) (`vso.code_write`) and the Edit policies permission; for the Force push entry, Security (manage) (`vso.security_manage`) and Manage permissions. A 404 on an update or delete means the policy is gone: plan again.
+
+POSTs aren't retried after a server error, because the first one may have half-worked; plan again to see what was written.
+
 ## Still to verify on a live server
 
 These are checked against stubs, not yet against a real server:
@@ -87,4 +105,7 @@ These are checked against stubs, not yet against a real server:
 - that `deploymentType` comes back as `hosted` or `onPremises`;
 - the branch security token's encoding, and that `[Project]\Project Valid Users` is found by a general identity search on Server and on Services (`vssps.dev.azure.com`).
 
-Run a plan with a read-only PAT to check them. The plan only reads.
+- that `merge: false` on Access Control Entries - Set replaces only the listed identity's entry, as the REST reference says;
+- that a policy update's `PUT` accepts the configuration as Setpoint reads it, with `settings.scope` as the only scope.
+
+Run a plan with a read-only PAT to check the first four; the plan only reads. The last two need an apply on a server you may change, such as the Express VM. Recorded fixtures replace the stubs in [#75](https://github.com/Quattordici/Setpoint/issues/75).

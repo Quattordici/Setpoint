@@ -217,6 +217,10 @@ public sealed class Applier
                 {
                     yield return $"{repo}: {appeared.Key} now exists where the plan creates {wanted.Key}.";
                 }
+                else if (live.Ambiguous.FirstOrDefault(a => a.MatchKey == wanted.MatchKey) is { } several)
+                {
+                    yield return $"{repo}: {string.Join(", ", several.ObjectKeys)} now exist where the plan creates {wanted.Key}.";
+                }
 
                 continue;
             }

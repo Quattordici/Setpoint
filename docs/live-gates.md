@@ -46,7 +46,7 @@ The gate policy uses every neutral rule, a group, a repo override, a removal and
 
 `-PlanOnly` stops after `validate-gate`, `plan` and a read-only `drift`, and the last two accept 0 or 5. `ado-employer` is always plan-only, with no hand edit.
 
-> Until Azure DevOps writes land ([#36](https://github.com/Quattordici/Setpoint/issues/36)), `apply` writes nothing to Azure DevOps, so run the `ado-*` gates with `-PlanOnly`. The nightly workflow does that until the repository variable `LIVE_GATE_ADO_APPLY` is `true`.
+> Azure DevOps writes landed with [#36](https://github.com/Quattordici/Setpoint/issues/36), but they have only run against stubs. Run the `ado-*` gates by hand without `-PlanOnly` once on the Express VM (from its `clean` checkpoint) before turning them on in the nightly workflow: it keeps them plan-only until the repository variable `LIVE_GATE_ADO_APPLY` is `true`.
 
 ## One-time setup
 
@@ -89,7 +89,7 @@ The [Live gate workflow](../.github/workflows/live-gate.yml) runs nightly at 02:
 
 1. Register a self-hosted runner on your machine (*Settings → Actions → Runners → New self-hosted runner*), with the extra label `setpoint-live`. For `-ResetVm`, the runner's account must be in the **Hyper-V Administrators** group.
 2. Create the environment `live-gate` (*Settings → Environments*), with a deployment branch rule allowing only `main`, and the secrets `LIVE_GITHUB_TOKEN`, `LIVE_ADO_CLOUD_TOKEN` and `LIVE_ADO_SERVER_TOKEN`.
-3. Set the repository variable `LIVE_GATE_ENABLED` to `true` (*Settings → Secrets and variables → Actions → Variables*). Set `LIVE_GATE_ADO_APPLY` to `true` once #36 is merged.
+3. Set the repository variable `LIVE_GATE_ENABLED` to `true` (*Settings → Secrets and variables → Actions → Variables*). Set `LIVE_GATE_ADO_APPLY` to `true` once an Azure DevOps gate has passed by hand with writes.
 
 The workflow runs only on `schedule` and `workflow_dispatch`, never on pull requests, so code from a fork can't reach the runner or the tokens. It runs the environments one at a time, restores the VM before `ado-server`, and uploads each run's output as an artifact for 14 days.
 

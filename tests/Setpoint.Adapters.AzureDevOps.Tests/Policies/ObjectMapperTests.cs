@@ -57,7 +57,7 @@ public sealed class ObjectMapperTests
         diff.Objects[2].Payload!["settings"]!["allowSquash"]!.GetValue<bool>().ShouldBeTrue();
         diff.Objects[3].Payload!["settings"]!["buildDefinitionId"]!.GetValue<int>().ShouldBe(12);
         diff.Objects[5].Payload!.ToJsonString().ShouldBe(
-            $$"""{"token":"{{ForcePushAcl.BranchToken(_context.ProjectId, _context.RepoId, "main")}}","merge":true,"accessControlEntries":[{"descriptor":"{{_context.ValidUsers}}","allow":0,"deny":8}]}""");
+            $$"""{"token":"{{ForcePushAcl.BranchToken(_context.ProjectId, _context.RepoId, "main")}}","merge":false,"accessControlEntries":[{"descriptor":"{{_context.ValidUsers}}","allow":0,"deny":8}]}""");
     }
 
     /// <summary>
