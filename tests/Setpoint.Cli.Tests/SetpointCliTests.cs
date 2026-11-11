@@ -71,7 +71,8 @@ public sealed class SetpointCliTests
 
         // Assert
         run.ExitCode.ShouldBe(ExitCode.Success);
-        run.Out.ShouldStartWith("0.");
+        run.Out.Trim().ShouldBe(SetpointVersion.Current);
+        run.Out.ShouldStartWith("1.");
     }
 
     /// <summary>

@@ -1,0 +1,466 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://raw.githubusercontent.com/Quattordici/Setpoint/main/schema/v1/layer.json",
+  "title": "Setpoint policy layer",
+  "description": "A Setpoint layer file: baseline.yml, groups/<name>.yml or repos/<target>/<project-or-owner>/<repo>.yml.",
+  "type": "object",
+  "properties": {
+    "version": {
+      "const": 1,
+      "description": "The policy format version. Must be 1."
+    },
+    "layer": {
+      "enum": [
+        "baseline",
+        "group",
+        "repo"
+      ],
+      "description": "Which layer this file is: baseline, group or repo."
+    },
+    "name": {
+      "type": [
+        "string",
+        "null"
+      ],
+      "description": "The group's name. Groups only; it must match the file name."
+    },
+    "repo": {
+      "type": [
+        "string",
+        "null"
+      ],
+      "description": "The repo this override is for, as <target>/<project-or-owner>/<repo>. Repo overrides only; it must match the file path."
+    },
+    "selectors": {
+      "type": [
+        "array",
+        "null"
+      ],
+      "items": {
+        "type": "string"
+      },
+      "description": "Explicit repos or globs over <target>/<project-or-owner>/<repo> that put repos in this group. Groups only."
+    },
+    "locked": {
+      "type": [
+        "array",
+        "null"
+      ],
+      "items": {
+        "type": "string"
+      },
+      "description": "Rules that groups and repo overrides may not change. Baseline only."
+    },
+    "rules": {
+      "type": "object",
+      "properties": {
+        "minimumReviewers": {
+          "type": [
+            "object",
+            "null"
+          ],
+          "properties": {
+            "enabled": {
+              "type": "boolean",
+              "description": "false means the setting must be absent."
+            },
+            "count": {
+              "type": [
+                "integer",
+                "null"
+              ],
+              "description": "How many approvals are needed. GitHub allows at most 10."
+            },
+            "resetOnPush": {
+              "type": "boolean",
+              "description": "Whether a new push to the source branch resets existing approvals."
+            }
+          },
+          "additionalProperties": false,
+          "description": "Approvals required before a pull request can complete. ~ leaves it unmanaged; enabled: false removes it."
+        },
+        "requiredChecks": {
+          "type": [
+            "array",
+            "null"
+          ],
+          "items": {
+            "type": "object",
+            "properties": {
+              "name": {
+                "type": "string",
+                "description": "The status check context on GitHub, or the pipeline name on Azure DevOps."
+              }
+            },
+            "required": [
+              "name"
+            ],
+            "additionalProperties": false
+          },
+          "description": "Checks that must pass before a pull request can complete. On Azure DevOps each name is a pipeline, enforced as build validation. An empty list removes them."
+        },
+        "requireCommentResolution": {
+          "anyOf": [
+            {
+              "oneOf": [
+                {
+                  "type": "boolean"
+                },
+                {
+                  "type": "object",
+                  "properties": {
+                    "enabled": {
+                      "type": "boolean"
+                    }
+                  },
+                  "required": [
+                    "enabled"
+                  ],
+                  "additionalProperties": false
+                }
+              ]
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "description": "All review comments must be resolved before a pull request can complete. false removes the setting."
+        },
+        "allowedMergeTypes": {
+          "type": [
+            "array",
+            "null"
+          ],
+          "items": {
+            "enum": [
+              "merge",
+              "squash",
+              "rebase"
+            ]
+          },
+          "description": "The merge types a pull request may complete with. Must not be empty."
+        },
+        "protectFromForcePushAndDelete": {
+          "anyOf": [
+            {
+              "oneOf": [
+                {
+                  "type": "boolean"
+                },
+                {
+                  "type": "object",
+                  "properties": {
+                    "enabled": {
+                      "type": "boolean"
+                    }
+                  },
+                  "required": [
+                    "enabled"
+                  ],
+                  "additionalProperties": false
+                }
+              ]
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "description": "The default branch can't be force-pushed or deleted. false removes the protection."
+        },
+        "access": {
+          "type": [
+            "object",
+            "null"
+          ],
+          "additionalProperties": {
+            "enum": [
+              "none",
+              "read",
+              "write",
+              "admin"
+            ]
+          },
+          "description": "Team and group permissions on the repo: a team slug (GitHub) or group name (Azure DevOps) to read, write, admin, or none to remove the access Setpoint manages. Principals not listed are left alone. A lower layer replaces the whole map."
+        },
+        "environments": {
+          "type": [
+            "object",
+            "null"
+          ],
+          "additionalProperties": {
+            "type": "object",
+            "properties": {
+              "enabled": {
+                "type": "boolean",
+                "description": "false removes the approvals, wait and branch restriction, and keeps the environment."
+              },
+              "reviewers": {
+                "type": [
+                  "array",
+                  "null"
+                ],
+                "items": {
+                  "type": "string"
+                },
+                "description": "Who must approve a deployment: team slugs on GitHub (users go in github.environments), group or user names on Azure DevOps. An empty list removes the approvals."
+              },
+              "waitMinutes": {
+                "type": [
+                  "integer",
+                  "null"
+                ],
+                "description": "Minutes to wait before a deployment starts, from 0 (none) to 43200 (30 days)."
+              },
+              "branches": {
+                "enum": [
+                  "default",
+                  "any",
+                  null
+                ],
+                "description": "Which branches may deploy: default (the default branch, or protected branches on GitHub) or any."
+              }
+            },
+            "additionalProperties": false
+          },
+          "description": "Deployment environments and their approvals, by environment name. Environments not listed are left alone; a missing one is created, and none is ever deleted. A lower layer replaces the whole map."
+        }
+      },
+      "additionalProperties": false,
+      "description": "The neutral rules this layer sets."
+    },
+    "azuredevops": {
+      "type": "object",
+      "properties": {
+        "minimumReviewers": {
+          "type": [
+            "object",
+            "null"
+          ],
+          "properties": {
+            "creatorVoteCounts": {
+              "type": "boolean",
+              "description": "The pull request creator's own vote counts toward the minimum."
+            },
+            "allowDownvotes": {
+              "type": "boolean",
+              "description": "A pull request can complete even when some reviewers vote 'waiting' or 'rejected'."
+            },
+            "blockLastPusherVote": {
+              "type": "boolean",
+              "description": "The vote of the person who pushed most recently does not count."
+            }
+          },
+          "additionalProperties": false,
+          "description": "Azure DevOps options for the neutral minimumReviewers rule."
+        },
+        "requiredChecks": {
+          "type": [
+            "object",
+            "null"
+          ],
+          "properties": {
+            "validDuration": {
+              "type": [
+                "integer",
+                "null"
+              ],
+              "description": "Minutes a build validation result stays valid. 0 means it never expires."
+            },
+            "pathFilters": {
+              "type": [
+                "array",
+                "null"
+              ],
+              "items": {
+                "type": "string"
+              },
+              "description": "Paths that trigger build validation, in Azure DevOps filter syntax, such as /src/*."
+            },
+            "statusChecks": {
+              "type": [
+                "array",
+                "null"
+              ],
+              "items": {
+                "type": "object",
+                "properties": {
+                  "name": {
+                    "type": "string",
+                    "description": "The status name the external service posts."
+                  },
+                  "genre": {
+                    "type": [
+                      "string",
+                      "null"
+                    ],
+                    "description": "The status genre, if the service sets one."
+                  }
+                },
+                "required": [
+                  "name"
+                ],
+                "additionalProperties": false
+              },
+              "description": "External status checks that must succeed, posted by other services rather than Azure Pipelines."
+            }
+          },
+          "additionalProperties": false,
+          "description": "Azure DevOps options for the neutral requiredChecks rule."
+        },
+        "allowedMergeTypes": {
+          "type": [
+            "object",
+            "null"
+          ],
+          "properties": {
+            "allowRebaseMerge": {
+              "type": "boolean",
+              "description": "Also allow rebase with a merge commit (semi-linear merge)."
+            }
+          },
+          "additionalProperties": false,
+          "description": "Azure DevOps options for the neutral allowedMergeTypes rule."
+        }
+      },
+      "additionalProperties": false,
+      "description": "Options that exist only on Azure DevOps, grouped under the neutral rule they extend."
+    },
+    "github": {
+      "type": "object",
+      "properties": {
+        "pullRequest": {
+          "type": [
+            "object",
+            "null"
+          ],
+          "properties": {
+            "requireCodeOwnerReview": {
+              "type": "boolean",
+              "description": "A code owner must approve changes to files they own."
+            },
+            "requireLastPushApproval": {
+              "type": "boolean",
+              "description": "The most recent push must be approved by someone other than the person who pushed it."
+            }
+          },
+          "additionalProperties": false,
+          "description": "Pull request options with no neutral equivalent."
+        },
+        "requiredChecks": {
+          "type": [
+            "object",
+            "null"
+          ],
+          "properties": {
+            "strict": {
+              "type": "boolean",
+              "description": "The branch must be up to date with the default branch before merging."
+            },
+            "integrationIds": {
+              "type": [
+                "object",
+                "null"
+              ],
+              "additionalProperties": {
+                "type": "integer"
+              },
+              "description": "Pins a check to the GitHub App that must report it: check name to App id."
+            }
+          },
+          "additionalProperties": false,
+          "description": "GitHub-only options for the neutral requiredChecks rule."
+        },
+        "bypassActors": {
+          "type": [
+            "array",
+            "null"
+          ],
+          "items": {
+            "type": "object",
+            "properties": {
+              "actorType": {
+                "enum": [
+                  "integration",
+                  "organizationAdmin",
+                  "repositoryRole",
+                  "team",
+                  "deployKey"
+                ],
+                "description": "What kind of actor this is."
+              },
+              "actorId": {
+                "type": [
+                  "integer",
+                  "null"
+                ],
+                "description": "The team, App, role or deploy key id. Not used for organizationAdmin."
+              },
+              "bypassMode": {
+                "enum": [
+                  "always",
+                  "pullRequest"
+                ],
+                "description": "When the actor may bypass: always, or only through a pull request."
+              }
+            },
+            "required": [
+              "actorType"
+            ],
+            "additionalProperties": false
+          },
+          "description": "Who may bypass the setpoint ruleset. Nobody may unless this is declared."
+        },
+        "access": {
+          "type": [
+            "object",
+            "null"
+          ],
+          "additionalProperties": {
+            "enum": [
+              "triage",
+              "maintain"
+            ]
+          },
+          "description": "GitHub-only roles for the neutral access rule: a team slug to triage or maintain. A team can't be in both access and github.access."
+        },
+        "environments": {
+          "type": [
+            "object",
+            "null"
+          ],
+          "additionalProperties": {
+            "type": "object",
+            "properties": {
+              "users": {
+                "type": [
+                  "array",
+                  "null"
+                ],
+                "items": {
+                  "type": "string"
+                },
+                "description": "Users who must approve a deployment, by login. Teams go in the neutral reviewers; together at most 6. An empty list removes the user reviewers."
+              },
+              "preventSelfReview": {
+                "type": [
+                  "boolean",
+                  "null"
+                ],
+                "description": "true keeps the person who started a deployment from approving it."
+              }
+            },
+            "additionalProperties": false
+          },
+          "description": "GitHub-only options for the neutral environments rule, by environment name: users who must approve, and whether the person who started a deployment may approve it."
+        }
+      },
+      "additionalProperties": false,
+      "description": "Options that exist only on GitHub. They apply to the setpoint ruleset."
+    }
+  },
+  "required": [
+    "version",
+    "layer"
+  ],
+  "additionalProperties": false
+}
