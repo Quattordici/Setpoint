@@ -324,6 +324,63 @@ public sealed class PlannerTests
     }
 
     /// <summary>
+    /// Given two repos that share the object a rule maps to, and declare it the same way,
+    /// when they are planned,
+    /// then the object is written once, by the first repo by path, and the other is in sync.
+    /// </summary>
+    [Fact(DisplayName = "👍 A shared object the repos agree on is planned once")]
+    public async Task Plan_SharedObjectAgreed_PlannedOnce()
+    {
+        // Arrange
+        _builder.WithBaseline(Baseline("requireCommentResolution: true"));
+        _adapter.SharedRules.Add("requireCommentResolution");
+        _adapter.AddRepo(new RepoRef(_builder.TargetName, _builder.Owner, "web"));
+        _adapter.AddRepo(Repo);
+
+        // Act
+        PlanResult result = await PlanAsync();
+
+        // Assert
+        result.Document.Repos.Select(r => $"{r.Path} {r.Status} {r.Objects.Count} {r.Changes.Count}").ShouldBe(
+            [$"{_builder.Owner}/web InSync 0 0", $"{_builder.Owner}/api Changes 1 1"],
+            ignoreOrder: true);
+    }
+
+    /// <summary>
+    /// Given two repos that share the object a rule maps to, and a repo override that declares it differently,
+    /// when they are planned,
+    /// then both repos fail with SP0122, each naming the other, and nothing is planned for either.
+    /// </summary>
+    [Fact(DisplayName = "👎 A shared object declared differently is SP0122 on each repo")]
+    public async Task Plan_SharedObjectConflict_FailsBoth()
+    {
+        // Arrange
+        string target = _builder.TargetName;
+        string owner = _builder.Owner;
+        _builder.WithBaseline(Baseline("requireCommentResolution: true"))
+            .WithRepoOverride($"{target}/{owner}/web", $"""
+                version: 1
+                layer: repo
+                repo: {target}/{owner}/web
+                rules:
+                  requireCommentResolution: false
+                """);
+        _adapter.SharedRules.Add("requireCommentResolution");
+        _adapter.AddRepo(new RepoRef(target, owner, "web")).WithLive("requireCommentResolution", "true");
+        _adapter.AddRepo(Repo);
+
+        // Act
+        PlanResult result = await PlanAsync();
+
+        // Assert
+        result.Document.Repos.ShouldAllBe(r => r.Status == PlanRepoStatus.Error && r.Objects.Count == 0);
+        Diagnostic[] errors = [.. result.Diagnostics.Where(d => d.Code == DiagnosticCodes.SharedObjectConflict)];
+        errors.Length.ShouldBe(2);
+        errors.ShouldContain(d => d.Message.Contains($"and {owner}/web declare it differently", StringComparison.Ordinal));
+        errors.ShouldContain(d => d.Message.Contains($"and {owner}/api declare it differently", StringComparison.Ordinal));
+    }
+
+    /// <summary>
     /// Given a rule that two live objects match,
     /// when the repo is planned,
     /// then SP2201 warns and nothing is created or changed for that rule.

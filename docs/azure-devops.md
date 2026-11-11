@@ -93,6 +93,26 @@ The `access` rule maps each named group or user to a role, written as allow bits
 - Permissions on the project token (`repoV2/{project}`) are inherited by every repo in the project. Plan lists them for the identities the policy names, and SP2101 warns when one grants more than the policy's role, because that access still applies.
 - Without Security (manage) the repo token can't be read, and `access` is reported as unknown (SP2202).
 
+### Environments
+
+The `environments` rule manages environments of the repo's project (Pipelines → Environments) and one **Approval** check on each:
+
+| Field | Azure DevOps |
+| --- | --- |
+| `reviewers` | the Approval check's approvers, by group or user name, resolved like `access` names. All of them must approve (`minRequiredApprovers` is the number of approvers) |
+| `enabled: false` | the Approval check is removed; the environment is kept |
+| `waitMinutes` | not available: environments have no wait before a deployment. An approval's timeout is how long it waits for approvers, which is something else. Ignored with SP3002 |
+| `branches: default` | not available yet: Azure DevOps restricts branches with a separate Branch control check, which Setpoint doesn't manage. Ignored with SP3002; `any` needs nothing |
+
+- Environments belong to the project, not the repo. Every repo in the project that declares an environment must declare it the same way, or each of them fails with SP0122 naming the others. When they agree, the change is planned once, under the first repo of the project by name, and apply writes it once.
+- A missing environment is created, with its check if it has reviewers. Setpoint never deletes an environment and never touches its resources, security or other checks.
+- The Approval check's other settings (instructions, timeout, order, blocked approvers, whether the requester may approve) keep their live values. A new check gets the web UI's defaults, with a 30-day timeout.
+- Other checks, such as Business hours or Invoke REST API, are listed as unmanaged. An environment with more than one Approval check is ambiguous (SP2201) and left alone.
+- `reviewers` left out keeps the live approvers.
+- Environments not named in the policy are listed as unmanaged.
+
+The environments and checks endpoints have no released version at 7.0, so their exact preview is pinned: `_apis/distributedtask/environments` and `_apis/pipelines/checks/configurations` at `api-version=7.0-preview.1`. Every other call uses `7.0`. A project's environments and their checks are read once per run.
+
 Policies are read with the project-wide `GET {project}/_apis/policy/configurations`, which is released at 7.0, and filtered by scope in Setpoint. A project's policies, pipelines and Project Valid Users group are read once per run, however many of its repos are planned.
 
 ## Applying
@@ -106,6 +126,7 @@ Policies are read with the project-wide `GET {project}/_apis/policy/configuratio
 | Delete a policy | `DELETE {project}/_apis/policy/configurations/{id}` |
 | Force push entry | `POST _apis/accesscontrolentries/2e9eb7ed-3c0a-47d4-87c1-0ffdd275fd87` with `merge: false`, which replaces Project Valid Users' entry on the default branch's token and leaves every other entry alone. The entry is the live one with only the Force push bit changed. Merging can't be used, because it ORs bits in and could never take the deny off |
 | Access entry | The same request on the repo's token, `repoV2/{project}/{repo}`, for one identity: the live entry with the role's bits set and every other bit kept |
+| Environment | Looks the environment up by name, `POST {project}/_apis/distributedtask/environments` to create it if it is missing, then `POST`, `PATCH .../checks/configurations/{id}` or `DELETE .../{id}` for its Approval check, on the environment's id. A check id from the plan must be an Approval check on that environment, or nothing is written |
 
 - Before sending anything, Setpoint checks that the object is about this repo's default branch: a policy must be scoped to exactly that branch, the Force push entry must be on its token, and an access entry must be on the repo's token for the identity the plan matched. Anything else in a plan file is refused without a request.
 - A create is refused as stale (exit 3) when an object with the same match now exists, or when several do, so an ambiguous match is never written.
@@ -125,6 +146,7 @@ These are checked against stubs, not yet against a real server:
 - that the `access` role bits match what the web UI shows for each permission, and that a bare group name is found as `[Project]\Name` (this plan needs Security (manage) to read the repo token).
 
 - that `merge: false` on Access Control Entries - Set replaces only the listed identity's entry, as the REST reference says;
+- that the environments and checks previews accept the payloads as Setpoint writes them, that `minRequiredApprovers` set to the number of approvers means all of them, and which scope reads environments;
 - that a policy update's `PUT` accepts the configuration as Setpoint reads it, with `settings.scope` as the only scope.
 
-Run a plan with a read-only PAT to check the first five; the plan only reads. The last two need an apply on a server you may change, such as the Express VM. Recorded fixtures replace the stubs in [#75](https://github.com/Quattordici/Setpoint/issues/75).
+Run a plan with a read-only PAT to check the first five; the plan only reads. The last three need an apply on a server you may change, such as the Express VM. Recorded fixtures replace the stubs in [#75](https://github.com/Quattordici/Setpoint/issues/75).

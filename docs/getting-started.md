@@ -48,7 +48,7 @@ targets:
 
 Edit `scope:` and `url:` to match your estate. On Azure DevOps Server, `url:` is the collection URL, such as `https://ado.example.com/tfs/DefaultCollection`. Platform details are in [github.md](github.md) and [azure-devops.md](azure-devops.md).
 
-The baseline holds the neutral rules. Setpoint translates each one into a ruleset rule on GitHub and a branch policy or permission on Azure DevOps. Two more apply to the whole repo: `access` gives teams (GitHub) or groups and users (Azure DevOps) a role on the repo (see [GitHub](github.md#team-access) and [Azure DevOps](azure-devops.md#access)), and `environments` sets deployment approvals (see [GitHub](github.md#environments)):
+The baseline holds the neutral rules. Setpoint translates each one into a ruleset rule on GitHub and a branch policy or permission on Azure DevOps. Two more apply to the whole repo: `access` gives teams (GitHub) or groups and users (Azure DevOps) a role on the repo (see [GitHub](github.md#team-access) and [Azure DevOps](azure-devops.md#access)), and `environments` sets deployment approvals (see [GitHub](github.md#environments) and [Azure DevOps](azure-devops.md#environments)):
 
 ```yaml
 version: 1

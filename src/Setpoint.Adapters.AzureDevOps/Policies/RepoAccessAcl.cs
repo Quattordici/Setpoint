@@ -151,4 +151,5 @@ internal static class RepoAccessAcl
 /// <summary>An identity a name in the <c>access</c> rule resolved to.</summary>
 /// <param name="Name">Its name for people, such as <c>[Payments]\Contributors</c>; live entries are named the same way.</param>
 /// <param name="Descriptor">Its identity descriptor, which security entries are keyed by.</param>
-internal sealed record Principal(string Name, string Descriptor);
+/// <param name="Id">Its identity id, which environment approvers are written by.</param>
+internal sealed record Principal(string Name, string Descriptor, string? Id = null);

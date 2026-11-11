@@ -28,6 +28,7 @@ public sealed class AzureDevOpsAdapter : IProviderAdapter, IDisposable
     private readonly ConcurrentDictionary<(string Target, string Project), Lazy<Task<ProjectState>>> _projects = new();
     private readonly ConcurrentDictionary<(string Target, string Project, string Name), Lazy<Task<List<AdoIdentity>?>>> _identities = new();
     private readonly ConcurrentDictionary<(string Target, string Project), Lazy<Task<JsonObject?>>> _projectAcls = new();
+    private readonly ConcurrentDictionary<(string Target, string Project), Lazy<Task<List<(JsonObject Environment, List<JsonObject>? Checks)>?>>> _environments = new();
 
     /// <summary>Creates the adapter.</summary>
     public AzureDevOpsAdapter(AzureDevOpsAdapterOptions? options = null) => _options = options ?? new AzureDevOpsAdapterOptions();
@@ -157,19 +158,41 @@ public sealed class AzureDevOpsAdapter : IProviderAdapter, IDisposable
         Dictionary<string, string> names = await IdentityNamesAsync(session, [acl, repoAcl], cancellationToken).ConfigureAwait(false);
         string Name(string descriptor) => names.GetValueOrDefault(descriptor) ?? descriptor;
 
-        _contexts[repo] = context;
         LiveSnapshot live = LiveReader.Read(context, project.Configurations, acl, Name);
-
-        // Environments on Azure DevOps arrive in #74; until then the rule is skipped with a warning, not ignored.
-        live = live with
-        {
-            Unavailable = [new RuleWarning("environments", Diagnostic.Warning(
-                DiagnosticCodes.RuleUnavailable,
-                "environments: this version of Setpoint doesn't manage Azure DevOps environments yet, so the rule is skipped for this repo."))],
-        };
-        return repoAcl is null
+        live = repoAcl is null
             ? live with { UnknownRules = [.. live.UnknownRules, RepoAccessAcl.Access] }
             : live with { Objects = [.. live.Objects, .. RepoAccessAcl.Read(context.RepoToken, repoAcl, Name)] };
+
+        // The project's environments, read once per run: every repo there sees them, as it does on the web.
+        List<(JsonObject Environment, List<JsonObject>? Checks)>? environments = await _environments
+            .GetOrAdd((repo.Target, listed.Project.Id), key => new Lazy<Task<List<(JsonObject, List<JsonObject>?)>?>>(() =>
+                ReadEnvironmentsAsync(session, listed.Project.Id, cancellationToken)))
+            .Value.ConfigureAwait(false);
+        if (environments is null || environments.Any(e => e.Checks is null))
+        {
+            _contexts[repo] = context;
+            return live with { UnknownRules = [.. live.UnknownRules, EnvironmentApproval.Environments] };
+        }
+
+        var objects = new List<LiveObject>(live.Objects);
+        var unmanaged = new List<UnmanagedSetting>(live.Unmanaged);
+        var ambiguous = new Dictionary<string, RuleWarning>(StringComparer.Ordinal);
+        foreach ((JsonObject environment, List<JsonObject>? checks) in environments)
+        {
+            EnvironmentApproval.ReadResult read = EnvironmentApproval.Read(listed.Project.Id, environment, checks!, context.ApproverName);
+            unmanaged.AddRange(read.Unmanaged);
+            if (read.Object is { } found)
+            {
+                objects.Add(found);
+            }
+            else if (read.Ambiguous is { } warning)
+            {
+                ambiguous[(environment["name"]?.GetValue<string>() ?? string.Empty).ToLowerInvariant()] = warning;
+            }
+        }
+
+        _contexts[repo] = context with { AmbiguousEnvironments = ambiguous };
+        return live with { Objects = objects, Unmanaged = unmanaged };
     }
 
     /// <summary>
@@ -180,27 +203,87 @@ public sealed class AzureDevOpsAdapter : IProviderAdapter, IDisposable
     /// <exception cref="PolicyMappingException">A name matches no identity, or several (SP0207).</exception>
     public async Task<LiveSnapshot> PrepareAsync(DesiredState desired, LiveSnapshot live, CancellationToken cancellationToken)
     {
-        if (desired.Rules.GetValueOrDefault(RepoAccessAcl.Access)?.Value is not JsonObject { Count: > 0 } declared
-            || live.UnknownRules.Contains(RepoAccessAcl.Access)
-            || !_contexts.TryGetValue(desired.Repo, out RepoContext? context))
+        if (!_contexts.TryGetValue(desired.Repo, out RepoContext? context))
         {
             return live;
         }
 
         Session session = SessionFor(desired.Repo.Target);
         AdoProject project = context.Repo.Project;
-        var principals = new Dictionary<string, Principal>(StringComparer.Ordinal);
-        foreach ((string written, _) in declared)
+        if (desired.Rules.GetValueOrDefault(RepoAccessAcl.Access)?.Value is JsonObject { Count: > 0 } declared && !live.UnknownRules.Contains(RepoAccessAcl.Access))
         {
-            principals[written] = await ResolveAsync(session, desired.Repo.Target, project, written, cancellationToken).ConfigureAwait(false);
+            var principals = new Dictionary<string, Principal>(StringComparer.Ordinal);
+            foreach ((string written, _) in declared)
+            {
+                principals[written] = await ResolveAsync(session, desired.Repo.Target, project, written, cancellationToken).ConfigureAwait(false);
+            }
+
+            context = context with { Principals = principals };
+            JsonObject? projectAcl = await _projectAcls
+                .GetOrAdd((desired.Repo.Target, project.Id), key => new Lazy<Task<JsonObject?>>(() =>
+                    session.Api.GetAccessControlListAsync(ForcePushAcl.NamespaceId, RepoAccessAcl.ProjectToken(project.Id), cancellationToken)))
+                .Value.ConfigureAwait(false);
+            live = live with { Unmanaged = [.. live.Unmanaged, .. RepoAccessAcl.Inherited(projectAcl, principals, project.Name)] };
         }
 
-        _contexts[desired.Repo] = context with { Principals = principals };
-        JsonObject? projectAcl = await _projectAcls
-            .GetOrAdd((desired.Repo.Target, project.Id), key => new Lazy<Task<JsonObject?>>(() =>
-                session.Api.GetAccessControlListAsync(ForcePushAcl.NamespaceId, RepoAccessAcl.ProjectToken(project.Id), cancellationToken)))
-            .Value.ConfigureAwait(false);
-        return live with { Unmanaged = [.. live.Unmanaged, .. RepoAccessAcl.Inherited(projectAcl, principals, project.Name)] };
+        if (desired.Rules.GetValueOrDefault(EnvironmentApproval.Environments)?.Value is JsonObject { Count: > 0 } environments)
+        {
+            (live, context) = await PrepareEnvironmentsAsync(session, desired.Repo.Target, environments, live, context, cancellationToken).ConfigureAwait(false);
+        }
+
+        _contexts[desired.Repo] = context;
+        return live;
+    }
+
+    // Resolves the reviewers the policy names, so live approvers read under the same names, and warns about fields
+    // Azure DevOps environments don't have and about named environments with several Approval checks.
+    private async Task<(LiveSnapshot, RepoContext)> PrepareEnvironmentsAsync(
+        Session session,
+        string target,
+        JsonObject declared,
+        LiveSnapshot live,
+        RepoContext context,
+        CancellationToken cancellationToken)
+    {
+        List<RuleWarning> warnings = [.. live.Warnings ?? [], .. EnvironmentApproval.IgnoredFields(declared)];
+        warnings.AddRange(context.AmbiguousEnvironments
+            .Where(a => declared.Any(e => e.Key.Equals(a.Key, StringComparison.OrdinalIgnoreCase)))
+            .Select(a => a.Value));
+        if (live.UnknownRules.Contains(EnvironmentApproval.Environments))
+        {
+            return (live with { Warnings = warnings }, context);
+        }
+
+        var reviewers = new Dictionary<string, Principal>(StringComparer.Ordinal);
+        foreach (string written in declared.Select(e => e.Value?["reviewers"]).OfType<JsonArray>().SelectMany(a => a).OfType<JsonValue>()
+            .Select(v => v.TryGetValue(out string? text) ? text : null).OfType<string>().Distinct(StringComparer.Ordinal))
+        {
+            reviewers[written] = await ResolveAsync(session, target, context.Repo.Project, written, cancellationToken).ConfigureAwait(false);
+        }
+
+        context = context with { Reviewers = reviewers };
+        LiveObject[] objects = [.. live.Objects.Select(o => EnvironmentApproval.IsMatchKey(o.MatchKey) && o.Native is JsonObject native
+            ? o with { Rules = EnvironmentApproval.ReadRules(native, context.ApproverName) }
+            : o)];
+        return (live with { Objects = objects, Warnings = warnings }, context);
+    }
+
+    private static async Task<List<(JsonObject Environment, List<JsonObject>? Checks)>?> ReadEnvironmentsAsync(Session session, string projectId, CancellationToken cancellationToken)
+    {
+        List<JsonObject>? environments = await session.Api.ListEnvironmentsAsync(projectId, cancellationToken).ConfigureAwait(false);
+        if (environments is null)
+        {
+            return null;
+        }
+
+        var read = new List<(JsonObject, List<JsonObject>?)>();
+        foreach (JsonObject environment in environments)
+        {
+            long id = environment["id"]?.GetValue<long>() ?? 0;
+            read.Add((environment, await session.Api.ListEnvironmentChecksAsync(projectId, id, cancellationToken).ConfigureAwait(false)));
+        }
+
+        return read;
     }
 
     /// <summary>Maps the desired state to policy configurations and the Force push entry. It makes no calls.</summary>
@@ -263,7 +346,7 @@ public sealed class AzureDevOpsAdapter : IProviderAdapter, IDisposable
         AdoIdentity[] exact = [.. candidates.Where(i => string.Equals(DisplayName(i), filter, StringComparison.OrdinalIgnoreCase))];
         return (exact.Length > 0 ? exact : candidates) switch
         {
-            [var only] => new Principal(DisplayName(only) ?? filter, only.Descriptor!),
+            [var only] => new Principal(DisplayName(only) ?? filter, only.Descriptor!, only.Id),
             [] => throw new PolicyMappingException(
                 DiagnosticCodes.PrincipalNotFound,
                 $"access: no group or user is named '{filter}'. Use the group's name in project {project.Name}, or [Scope]\\Name for one outside it."),

@@ -20,6 +20,12 @@ internal sealed class AzureDevOpsApiClient(HttpClient http) : IDisposable
     /// <summary>The REST API version Setpoint pins: Azure DevOps Server 2022's, which every newer server and Services accept.</summary>
     public const string PinnedApiVersion = "7.0";
 
+    /// <summary>
+    /// The version the environments and checks calls carry. Neither area has a released version at 7.0, so the
+    /// exact preview is pinned; a server that changes the preview's shape fails these calls, not silently.
+    /// </summary>
+    public const string EnvironmentsApiVersion = "7.0-preview.1";
+
     /// <summary>The API version calls carry. It is <see cref="PinnedApiVersion"/> unless an older server was allowed.</summary>
     public string ApiVersion { get; set; } = PinnedApiVersion;
 
@@ -158,8 +164,53 @@ internal sealed class AzureDevOpsApiClient(HttpClient http) : IDisposable
         return items;
     }
 
+    /// <summary>
+    /// A project's deployment environments, or null when the token may not read them (401, 403) or the server has none (404). At most 1000 are
+    /// read, which is the most one listing returns.
+    /// </summary>
+    public async Task<List<JsonObject>?> ListEnvironmentsAsync(string projectId, CancellationToken cancellationToken)
+    {
+        using HttpResponseMessage response = await SendAsync(
+            HttpMethod.Get,
+            Preview($"{Segment(projectId)}/_apis/distributedtask/environments?$top=1000"),
+            cancellationToken).ConfigureAwait(false);
+        return response.StatusCode is HttpStatusCode.Unauthorized or HttpStatusCode.Forbidden or HttpStatusCode.NotFound
+            ? null
+            : (await ReadAsync(response, AzureDevOpsApiJsonContext.Default.AdoListJsonObject, cancellationToken).ConfigureAwait(false)).Value;
+    }
+
+    /// <summary>Creates an environment with no resources.</summary>
+    public Task<HttpResponseMessage> CreateEnvironmentAsync(string projectId, string name, CancellationToken cancellationToken) =>
+        SendAsync(HttpMethod.Post, Preview($"{Segment(projectId)}/_apis/distributedtask/environments"), new JsonObject { ["name"] = name, ["description"] = string.Empty }, cancellationToken);
+
+    /// <summary>The checks on one environment, with their settings, or null when the token may not read them (401, 403, 404).</summary>
+    public async Task<List<JsonObject>?> ListEnvironmentChecksAsync(string projectId, long environmentId, CancellationToken cancellationToken)
+    {
+        using HttpResponseMessage response = await SendAsync(
+            HttpMethod.Get,
+            Preview($"{Segment(projectId)}/_apis/pipelines/checks/configurations?resourceType=environment&resourceId={environmentId}&$expand=settings"),
+            cancellationToken).ConfigureAwait(false);
+        return response.StatusCode is HttpStatusCode.Unauthorized or HttpStatusCode.Forbidden or HttpStatusCode.NotFound
+            ? null
+            : (await ReadAsync(response, AzureDevOpsApiJsonContext.Default.AdoListJsonObject, cancellationToken).ConfigureAwait(false)).Value;
+    }
+
+    /// <summary>Adds a check from the payload, exactly as given.</summary>
+    public Task<HttpResponseMessage> CreateCheckAsync(string projectId, JsonObject payload, CancellationToken cancellationToken) =>
+        SendAsync(HttpMethod.Post, Preview($"{Segment(projectId)}/_apis/pipelines/checks/configurations"), payload, cancellationToken);
+
+    /// <summary>Replaces a check with the payload, exactly as given.</summary>
+    public Task<HttpResponseMessage> UpdateCheckAsync(string projectId, int id, JsonObject payload, CancellationToken cancellationToken) =>
+        SendAsync(HttpMethod.Patch, Preview($"{Segment(projectId)}/_apis/pipelines/checks/configurations/{id}"), payload, cancellationToken);
+
+    /// <summary>Removes a check.</summary>
+    public Task<HttpResponseMessage> DeleteCheckAsync(string projectId, int id, CancellationToken cancellationToken) =>
+        SendAsync(HttpMethod.Delete, Preview($"{Segment(projectId)}/_apis/pipelines/checks/configurations/{id}"), null, cancellationToken);
+
     /// <summary>A project or repo name as one path segment.</summary>
     internal static string Segment(string value) => Uri.EscapeDataString(value);
+
+    private static string Preview(string path) => $"{path}{(path.Contains('?', StringComparison.Ordinal) ? '&' : '?')}api-version={EnvironmentsApiVersion}";
 
     private string Versioned(string path) => $"{path}{(path.Contains('?', StringComparison.Ordinal) ? '&' : '?')}api-version={ApiVersion}";
 

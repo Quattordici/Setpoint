@@ -98,7 +98,7 @@ public sealed class AzureDevOpsReadTests : IAsyncLifetime
 
         // Assert
         live.Objects.ShouldHaveSingleItem().MatchKey.ShouldBe("ado:minimumReviewers/refs/heads/main");
-        live.UnknownRules.ShouldBe(["protectFromForcePushAndDelete", "access"]);
+        live.UnknownRules.ShouldBe(["protectFromForcePushAndDelete", "access", "environments"]);
     }
 
     /// <summary>

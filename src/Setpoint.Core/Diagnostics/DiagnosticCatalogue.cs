@@ -32,6 +32,7 @@ public static class DiagnosticCatalogue
         new(DiagnosticCodes.RedundantEnabledForm, DiagnosticSeverity.Warning, "Redundant enabled form"),
         new(DiagnosticCodes.OutsideScope, DiagnosticSeverity.Warning, "Repo outside target scope"),
         new(DiagnosticCodes.InvalidEnvironment, DiagnosticSeverity.Error, "Invalid environment"),
+        new(DiagnosticCodes.SharedObjectConflict, DiagnosticSeverity.Error, "Shared setting declared differently"),
         new(DiagnosticCodes.SelectorMatchesNothing, DiagnosticSeverity.Warning, "Selector matches nothing"),
         new(DiagnosticCodes.RepoNotFound, DiagnosticSeverity.Error, "Repo not found"),
         new(DiagnosticCodes.ArchivedRepoSkipped, DiagnosticSeverity.Info, "Archived repo skipped"),

@@ -75,6 +75,9 @@ public static class DiagnosticCodes
     /// <summary>An environment can't be written as declared: its wait is out of range, or it has more reviewers than the platform allows.</summary>
     public const string InvalidEnvironment = "SP0121";
 
+    /// <summary>Repos that share a platform object, such as an Azure DevOps environment, declare it differently.</summary>
+    public const string SharedObjectConflict = "SP0122";
+
     // 02xx: selection.
 
     /// <summary>A selector glob matches no repo in scope.</summary>
