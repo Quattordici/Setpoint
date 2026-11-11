@@ -6,7 +6,7 @@ Pull-request CI runs unit tests and WireMock tests only. The **live gates** run 
 
 | Environment | What | Gate | Writes |
 |---|---|---|---|
-| `ado-server` | An **Azure DevOps Server 2022 Express** VM on Hyper-V, restored from a checkpoint before each run | **Phase 2 gate** | Yes |
+| `ado-server` | An **Azure DevOps Server Express** VM on Hyper-V per supported release (2022, 2022.1, 2022.2 and 2025), restored from a checkpoint before each run | **Phase 2 gate**, and the release matrix | Yes |
 | `ado-cloud` | A free **Azure DevOps Services** org | Phase 1 gate (Services) | Yes |
 | `github` | A throwaway **GitHub Free** org with public repos only | Phase 1 gate (GitHub) | Yes |
 | `ado-employer` | Mattias's employer's Azure DevOps Server 2022 | Plan only | **Never** |
@@ -42,7 +42,7 @@ If `setpoint-live` is taken as a GitHub org name, pick another and change it in 
 
 The last five steps are **gate 3**: drift runs unattended and finds a hand edit. In the nightly workflow the drift summaries go to the run page (`GITHUB_STEP_SUMMARY`), and `drift.json` is uploaded with the rest of the output. Gate 3 passes when one nightly run is green on `github` and on `ado-cloud`; the Azure DevOps drift steps need writes, so they run once `LIVE_GATE_ADO_APPLY` is `true`.
 
-The gate policy uses every neutral rule, a group, a repo override, a removal and both provider blocks, so one run exercises every mapping. A step that doesn't exit as expected stops the run. The output folder, `tests/live/out/<environment>-<timestamp>/`, holds each step's output, the plan file, a transcript and any recordings. Git ignores it.
+The gate policy uses every neutral rule, a group, a repo override, a removal and both provider blocks, so one run exercises every mapping. A step that doesn't exit as expected stops the run. The output folder, `tests/live/out/<environment>[-<release>]-<timestamp>/`, holds each step's output, the plan file, a transcript and any recordings. Git ignores it.
 
 `-PlanOnly` stops after `validate-gate`, `plan` and a read-only `drift`, and the last two accept 0 or 5. `ado-employer` is always plan-only, with no hand edit.
 
@@ -68,6 +68,17 @@ You need PowerShell 7.2 or later and the .NET 10 SDK on the machine that runs th
 
    The PAT lives in the server's database, so it is part of the checkpoint. Every restore brings it back, valid until its expiry date.
 
+### Azure DevOps Server releases
+
+Each supported Server release has its own Express VM, listed in [`tests/live/servers.psd1`](../tests/live/servers.psd1) with its VM name, collection URL, the name the preflight must give it and its token's secret. The 2022 VM above is the first. For each of 2022.1, 2022.2 and Azure DevOps Server (2025):
+
+1. Create a VM as above, named as `servers.psd1` says (`setpoint-ado-2022-1`, `setpoint-ado-2022-2`, `setpoint-ado-2025`), and install that release with the **Express** configuration. Its host name is the VM name, so the URL is `http://<vm name>/DefaultCollection`.
+2. Create the same `setpoint-live` project, repos and `gate-ci` pipeline, and a PAT with the same scopes. Store it as *Setpoint live: ado-server-&lt;release&gt;*, and in the `live-gate` environment as the secret `servers.psd1` names (`LIVE_ADO_SERVER_2022_1_TOKEN` and so on).
+3. Shut it down and take the `clean` checkpoint.
+4. Add the release to the repository variable `LIVE_GATE_SERVERS` (comma-separated, such as `2022,2022.1,2022.2,2025`; it defaults to `2022`), so the nightly run includes it.
+
+The gate's plan step also checks that the preflight names each release as `servers.psd1` expects, and fails the run if it doesn't.
+
 ### The Azure DevOps Services org (`ado-cloud`)
 
 1. Create a free organization at <https://dev.azure.com>, named `setpoint-live` if it's free. Otherwise change `url:` in `tests/live/targets/ado-cloud.yml`.
@@ -88,10 +99,10 @@ Create a PAT with **Code (read)** and **Build (read)** only, in your own account
 The [Live gate workflow](../.github/workflows/live-gate.yml) runs nightly at 02:00 UTC and by hand (*Actions → Live gate → Run workflow*), on a self-hosted runner. It is off until you turn it on.
 
 1. Register a self-hosted runner on your machine (*Settings → Actions → Runners → New self-hosted runner*), with the extra label `setpoint-live`. For `-ResetVm`, the runner's account must be in the **Hyper-V Administrators** group.
-2. Create the environment `live-gate` (*Settings → Environments*), with a deployment branch rule allowing only `main`, and the secrets `LIVE_GITHUB_TOKEN`, `LIVE_ADO_CLOUD_TOKEN` and `LIVE_ADO_SERVER_TOKEN`.
+2. Create the environment `live-gate` (*Settings → Environments*), with a deployment branch rule allowing only `main`, and the secrets `LIVE_GITHUB_TOKEN`, `LIVE_ADO_CLOUD_TOKEN` and `LIVE_ADO_SERVER_TOKEN`, plus one per extra Server release (see [Azure DevOps Server releases](#azure-devops-server-releases)).
 3. Set the repository variable `LIVE_GATE_ENABLED` to `true` (*Settings → Secrets and variables → Actions → Variables*). Set `LIVE_GATE_ADO_APPLY` to `true` once an Azure DevOps gate has passed by hand with writes.
 
-The workflow runs only on `schedule` and `workflow_dispatch`, never on pull requests, so code from a fork can't reach the runner or the tokens. It runs the environments one at a time, restores the VM before `ado-server`, and uploads each run's output as an artifact for 14 days.
+The workflow runs only on `schedule` and `workflow_dispatch`, never on pull requests, so code from a fork can't reach the runner or the tokens. It runs the environments one at a time, one job per Server release in `LIVE_GATE_SERVERS`, restores each VM before its run, and uploads each run's output as an artifact for 14 days.
 
 ## Running a gate by hand
 
@@ -101,6 +112,11 @@ $env:SETPOINT_LIVE_TOKEN = '<the token for this environment>'
 ./tests/live/Invoke-LiveGate.ps1 -Environment github
 ./tests/live/Invoke-LiveGate.ps1 -Environment ado-cloud -PlanOnly
 ./tests/live/Invoke-LiveGate.ps1 -Environment ado-server -ResetVm -PlanOnly
+
+# Another Server release, or several in turn. Each VM has its own PAT: set SETPOINT_LIVE_TOKEN_<release>, such as
+# SETPOINT_LIVE_TOKEN_2022_1, and SETPOINT_LIVE_TOKEN is the fallback.
+./tests/live/Invoke-LiveGate.ps1 -Environment ado-server -Server 2022.1 -ResetVm
+./tests/live/Invoke-LiveGate.ps1 -Environment ado-server -Server 2022, 2022.1, 2022.2, 2025 -ResetVm -Record
 
 # Plan only, never apply, never record. -EmployerScope is required, so a run never reads the whole collection.
 $env:SETPOINT_LIVE_TOKEN = '<the read-only employer PAT>'

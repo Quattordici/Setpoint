@@ -41,7 +41,7 @@ Before any repo is listed, Setpoint takes these steps against the target. A fail
 
 1. **Sign-in and identity.** `GET _apis/connectionData` gives the signed-in identity, which the plan shows. If Azure DevOps doesn't accept the token, it answers with its sign-in page (203) or 401, or signs the request in anonymously. Setpoint reports each of these as a refused token.
 2. **Services or Server.** The same response's `deploymentType` tells hosted (Services) from on-premises (Server). The URL decides only when it is missing: `dev.azure.com` and `*.visualstudio.com` are Services.
-3. **Server release.** On Server, `OPTIONS _apis/policy` lists the REST versions the policy API has. The highest released one is the release, from Microsoft's mapping: 7.0 is Server 2022 and 7.1 is Server 2022.1. Anything older than 7.0 is refused, naming the release, unless `--allow-unsupported-server` is set. With the flag, Setpoint marks the target "(unsupported)" and uses the server's own version, because the older server refuses 7.0.
+3. **Server release.** On Server, `OPTIONS _apis/policy` lists the REST versions the policy API has. The highest released one is the release, from Microsoft's mapping (see [Compatibility](#compatibility)). Anything older than 7.0 is refused, naming the release, unless `--allow-unsupported-server` is set. With the flag, Setpoint marks the target "(unsupported)" and uses the server's own version, because the older server refuses 7.0.
 4. **Policy types.** `GET {project}/_apis/policy/types` must list each type Setpoint manages: Minimum number of reviewers, Build, Status, Comment requirements and Require a merge strategy. The Status type's id comes from Microsoft's Terraform provider rather than the REST reference, so the server is asked. A collection with no projects has nothing to manage, so this check is skipped.
 
 Every REST call pins `api-version=7.0`. The two discovery calls in steps 1 and 3 carry no version, because they run before Setpoint knows which versions the server has. Pinning 7.0 on them would make a Server 2020 fail with "version out of range" instead of being named and refused.
@@ -134,6 +134,23 @@ Policies are read with the project-wide `GET {project}/_apis/policy/configuratio
 - A 401 or 403 names what is missing: for policies, Code (read & write) (`vso.code_write`) and the Edit policies permission; for the Force push and access entries, Security (manage) (`vso.security_manage`) and Manage permissions. A 404 on an update or delete means the policy is gone: plan again.
 
 POSTs aren't retried after a server error, because the first one may have half-worked; plan again to see what was written.
+
+## Compatibility
+
+Setpoint 1.0 supports Azure DevOps Services and these Server releases. Every release gets the same calls at the same versions: Setpoint pins Server 2022's, which every later release still accepts, so a newer server behaves like 2022 rather than in a way nobody tested.
+
+| Release | Preflight names it | Highest REST version | api-versions Setpoint uses | Known differences |
+|---|---|---|---|---|
+| Azure DevOps Services | Azure DevOps Services | latest | `7.0`, `7.0-preview.1` for environments and checks | `auth: entra` works only here. Identities are searched on `vssps.dev.azure.com`. |
+| Azure DevOps Server (2025) | Azure DevOps Server (2025) | 7.2 | `7.0`, `7.0-preview.1` for environments and checks | None known yet |
+| Azure DevOps Server 2022.2 | Azure DevOps Server 2022.1 or 2022.2 | 7.1 | `7.0`, `7.0-preview.1` for environments and checks | None known yet |
+| Azure DevOps Server 2022.1 | Azure DevOps Server 2022.1 or 2022.2 | 7.1 | `7.0`, `7.0-preview.1` for environments and checks | None known yet |
+| Azure DevOps Server 2022 | Azure DevOps Server 2022 | 7.0 | `7.0`, `7.0-preview.1` for environments and checks | The oldest supported release |
+| Server 2020 and older | Azure DevOps Server 2020, 2019 or Team Foundation Server | 6.0 or less | Refused, unless `--allow-unsupported-server` | Runs at the server's own version, untested |
+
+2022.2 is an update to 2022.1 that added no REST version, so the preflight can't tell them apart and names both. Setpoint uses the same calls on both, and each has its own row in the live gate.
+
+Each row is checked by [the live gate](live-gates.md#azure-devops-server-releases) on its own Express VM, and the recordings from those runs are what the adapter tests replay. Until a release's recordings are in, its row says "None known yet": the tests for it run against fixtures built by hand from the REST reference.
 
 ## Still to verify on a live server
 

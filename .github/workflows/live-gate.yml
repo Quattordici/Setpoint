@@ -14,6 +14,7 @@ on:
         description: Which test environment
         type: choice
         options: [all, github, ado-cloud, ado-server]
+        # ado-server runs every release listed in the repository variable LIVE_GATE_SERVERS.
         default: all
       record:
         description: Record redacted WireMock fixtures (uploaded as an artifact, never committed by the workflow)
@@ -31,17 +32,26 @@ concurrency:
 
 jobs:
   gate:
-    name: Live gate (${{ matrix.environment }})
+    name: Live gate (${{ matrix.environment }}${{ matrix.server && format(' {0}', matrix.server) || '' }})
     strategy:
       fail-fast: false
       # One at a time: the Express VM and the test orgs are shared state.
       max-parallel: 1
+      # One entry per Azure DevOps Server release, each on its own Express VM (tests/live/servers.psd1). The
+      # repository variable LIVE_GATE_SERVERS lists the releases whose VMs exist, such as "2022,2022.1"; it
+      # defaults to 2022.
       matrix:
-        environment: [github, ado-cloud, ado-server]
+        include:
+          - { environment: github, token: LIVE_GITHUB_TOKEN }
+          - { environment: ado-cloud, token: LIVE_ADO_CLOUD_TOKEN }
+          - { environment: ado-server, server: '2022', token: LIVE_ADO_SERVER_TOKEN }
+          - { environment: ado-server, server: '2022.1', token: LIVE_ADO_SERVER_2022_1_TOKEN }
+          - { environment: ado-server, server: '2022.2', token: LIVE_ADO_SERVER_2022_2_TOKEN }
+          - { environment: ado-server, server: '2025', token: LIVE_ADO_SERVER_2025_TOKEN }
     # Off until the environments exist: set the repository variable LIVE_GATE_ENABLED to true to turn it on.
     if: github.repository == 'Quattordici/Setpoint' && vars.LIVE_GATE_ENABLED == 'true'
     runs-on: [self-hosted, setpoint-live]
-    # Holds the test tokens: LIVE_GITHUB_TOKEN, LIVE_ADO_CLOUD_TOKEN, LIVE_ADO_SERVER_TOKEN.
+    # Holds the test tokens: LIVE_GITHUB_TOKEN, LIVE_ADO_CLOUD_TOKEN, and one LIVE_ADO_SERVER_*_TOKEN per Server VM.
     environment: live-gate
     steps:
       - name: Skip environments not asked for
@@ -50,6 +60,12 @@ jobs:
         run: |
           $wanted = '${{ github.event.inputs.environment }}'
           $run = (-not $wanted) -or $wanted -eq 'all' -or $wanted -eq '${{ matrix.environment }}'
+          $server = '${{ matrix.server }}'
+          if ($run -and $server) {
+            $servers = ('${{ vars.LIVE_GATE_SERVERS }}' -split '[,\s]+' | Where-Object { $_ })
+            if (-not $servers) { $servers = @('2022') }
+            $run = $servers -contains $server
+          }
           "run=$($run.ToString().ToLowerInvariant())" >> $env:GITHUB_OUTPUT
 
       - uses: actions/checkout@v4
@@ -67,10 +83,10 @@ jobs:
         if: steps.pick.outputs.run == 'true'
         shell: pwsh
         env:
-          SETPOINT_LIVE_TOKEN: ${{ matrix.environment == 'github' && secrets.LIVE_GITHUB_TOKEN || matrix.environment == 'ado-cloud' && secrets.LIVE_ADO_CLOUD_TOKEN || secrets.LIVE_ADO_SERVER_TOKEN }}
+          SETPOINT_LIVE_TOKEN: ${{ secrets[matrix.token] }}
         run: |
           $gate = @{ Environment = '${{ matrix.environment }}' }
-          if ('${{ matrix.environment }}' -eq 'ado-server') { $gate.ResetVm = $true }
+          if ('${{ matrix.environment }}' -eq 'ado-server') { $gate.ResetVm = $true; $gate.Server = @('${{ matrix.server }}') }
           # Azure DevOps writes landed with #36. Set LIVE_GATE_ADO_APPLY once a gate has passed by hand with writes; until then the ADO gates only plan.
           if ('${{ matrix.environment }}' -like 'ado-*' -and '${{ vars.LIVE_GATE_ADO_APPLY }}' -ne 'true') { $gate.PlanOnly = $true }
           if ('${{ github.event.inputs.record }}' -eq 'true') { $gate.Record = $true }
@@ -80,7 +96,7 @@ jobs:
         if: always() && steps.pick.outputs.run == 'true'
         uses: actions/upload-artifact@v4
         with:
-          name: live-gate-${{ matrix.environment }}
+          name: live-gate-${{ matrix.environment }}${{ matrix.server && format('-{0}', matrix.server) || '' }}
           path: |
             tests/live/out/**/*.txt
             tests/live/out/**/*.log
