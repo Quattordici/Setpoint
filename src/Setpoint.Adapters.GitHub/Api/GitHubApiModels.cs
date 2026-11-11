@@ -6,8 +6,15 @@ namespace Setpoint.Adapters.GitHub.Api;
 /// <summary>The signed-in account, from <c>GET /user</c>.</summary>
 internal sealed record GitHubUser(string Login);
 
-/// <summary>An organization or user that owns repos.</summary>
-internal sealed record GitHubAccount(string Login);
+/// <summary>An organization or user that owns repos. <c>Type</c> is <c>Organization</c> or <c>User</c>.</summary>
+internal sealed record GitHubAccount(string Login, string? Type = null)
+{
+    /// <summary>True unless GitHub said the account is a user; only organizations have teams.</summary>
+    public bool MayHaveTeams => !string.Equals(Type, "User", StringComparison.OrdinalIgnoreCase);
+}
+
+/// <summary>A team, from a repo's or an organization's team listing. <c>Permission</c> is only on a repo's listing.</summary>
+internal sealed record GitHubTeam(string Slug, string? Permission = null, string? RoleName = null);
 
 /// <summary>
 /// A repo, from a repo listing or <c>GET /repos/{owner}/{repo}</c>. The merge flags are only in the single-repo
@@ -100,4 +107,5 @@ internal sealed record GitHubInstallationRepositories(List<GitHubRepository> Rep
 [JsonSerializable(typeof(List<GitHubInstallation>))]
 [JsonSerializable(typeof(GitHubInstallationToken))]
 [JsonSerializable(typeof(GitHubInstallationRepositories))]
+[JsonSerializable(typeof(List<GitHubTeam>))]
 internal sealed partial class GitHubApiJsonContext : JsonSerializerContext;

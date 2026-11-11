@@ -9,6 +9,7 @@ internal sealed class GitHubRepoBuilder
 
     private string _owner = s_faker.Internet.UserName().ToLowerInvariant().Replace('.', '-');
     private string _name = s_faker.Hacker.Noun().ToLowerInvariant().Replace(' ', '-') + "-" + s_faker.Random.Number(100, 999);
+    private string _ownerType = "Organization";
     private bool _private;
     private bool _archived;
     private bool _fork;
@@ -19,6 +20,14 @@ internal sealed class GitHubRepoBuilder
     public GitHubRepoBuilder WithOwner(string owner)
     {
         _owner = owner;
+        return this;
+    }
+
+    /// <summary>A repo owned by a user account, which has no teams.</summary>
+    public GitHubRepoBuilder OwnedByUser(string user)
+    {
+        _owner = user;
+        _ownerType = "User";
         return this;
     }
 
@@ -82,7 +91,7 @@ internal sealed class GitHubRepoBuilder
             ["id"] = s_faker.Random.Long(1_000, 9_999_999),
             ["name"] = _name,
             ["full_name"] = $"{_owner}/{_name}",
-            ["owner"] = new JsonObject { ["login"] = _owner, ["type"] = "Organization" },
+            ["owner"] = new JsonObject { ["login"] = _owner, ["type"] = _ownerType },
             ["private"] = _private,
             ["visibility"] = _private ? "private" : "public",
             ["archived"] = _archived,

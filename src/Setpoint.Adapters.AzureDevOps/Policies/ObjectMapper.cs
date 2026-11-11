@@ -19,6 +19,14 @@ internal static class ObjectMapper
     {
         var objects = new List<DesiredObject>();
         IReadOnlyDictionary<string, DesiredRule> rules = desired.Rules;
+        if (rules.GetValueOrDefault("access")?.Value is JsonObject { Count: > 0 })
+        {
+            // Rather than plan nothing for it, which would read as in sync.
+            throw new PolicyMappingException(
+                DiagnosticCodes.PrincipalNotFound,
+                "access: group permissions on Azure DevOps aren't in this build of Setpoint yet (#72). Leave access unmanaged (~) on Azure DevOps targets for now.");
+        }
+
         LiveObject? Live(string matchKey) => live.Objects.FirstOrDefault(o => o.MatchKey == matchKey);
 
         MapMinimumReviewers(rules, context, Live, objects);

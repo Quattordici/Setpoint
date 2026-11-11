@@ -15,7 +15,9 @@ Fine-grained PATs and GitHub Apps use the same permission names.
 | `plan` | **Metadata: read** | Read | Lists repos and reads rulesets. |
 | `plan`, recommended | + **Contents: read** | Read | Without it GitHub leaves the repo merge flags (`allow_*_merge`) out of its answer, so `SP2102` (no merge method left) can't be checked. |
 | `plan`, to see bypass actors | + **Administration: read** | Admin, or a custom role with *Edit repository rules* | GitHub only shows `bypass_actors` to callers with write access to the ruleset. Without it, `github.bypassActors` is reported as unknown (`SP2202`). Unconfirmed whether read is enough. |
+| `plan`, for `access` | + **Administration: read**, and **Members: read** on the organization | Read | Lists the repo's teams, and the organization's teams to check slugs (`SP0207`). Without the first, `access` is reported as unknown (`SP2202`). |
 | `apply` | **Administration: write** + Metadata: read + Contents: read | Admin, or a custom role with *Edit repository rules* | Creates, updates and deletes the `setpoint` ruleset. |
+| `apply`, for `access` | + **Members: read** on the organization | Organization owner, or a maintainer of each named team with admin on the repo | Adds the repo to a team with its role, or removes it. |
 
 A fine-grained PAT's resource owner must be the organization, and the organization may have to approve the token before it works on private repos.
 

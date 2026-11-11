@@ -166,6 +166,21 @@
             }
           ],
           "description": "The default branch can't be force-pushed or deleted. false removes the protection."
+        },
+        "access": {
+          "type": [
+            "object",
+            "null"
+          ],
+          "additionalProperties": {
+            "enum": [
+              "none",
+              "read",
+              "write",
+              "admin"
+            ]
+          },
+          "description": "Team and group permissions on the repo: a team slug (GitHub) or group name (Azure DevOps) to read, write, admin, or none to remove the access Setpoint manages. Principals not listed are left alone. A lower layer replaces the whole map."
         }
       },
       "additionalProperties": false,
@@ -352,6 +367,19 @@
             "additionalProperties": false
           },
           "description": "Who may bypass the setpoint ruleset. Nobody may unless this is declared."
+        },
+        "access": {
+          "type": [
+            "object",
+            "null"
+          ],
+          "additionalProperties": {
+            "enum": [
+              "triage",
+              "maintain"
+            ]
+          },
+          "description": "GitHub-only roles for the neutral access rule: a team slug to triage or maintain. A team can't be in both access and github.access."
         }
       },
       "additionalProperties": false,

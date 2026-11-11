@@ -68,13 +68,41 @@ A private repo is tested by asking for its rulesets. On GitHub Free that answers
 - A `setpoint` ruleset that is disabled, or that doesn't target exactly the default branch, reads as carrying no rules. The next apply makes it active on the default branch again.
 - The fingerprint leaves out `_links`, `current_user_can_bypass` and `bypass_actors`, because they depend on who reads the ruleset, and plan and apply use different tokens. Any edit still moves `updated_at`, so the stale check catches it.
 
+### Team access
+
+`access` and `github.access` aren't in the ruleset. Each team the policy names is its own object, matched by team slug (case doesn't matter):
+
+```yaml
+rules:
+  access:
+    platform: admin
+    payments: write
+    contractors: none
+github:
+  access:
+    support: triage
+```
+
+| Role | GitHub permission |
+|---|---|
+| `read` | `pull` |
+| `write` | `push` |
+| `admin` | `admin` |
+| `github.access: triage` or `maintain` | `triage` or `maintain` |
+| `none` | the repo is removed from the team |
+
+- Only the teams named are managed. Other teams with access to the repo are listed as unmanaged, and direct collaborators aren't read at all.
+- A live `triage`, `maintain` or custom role reads as its own name under `access`, so `platform: write` on a team that has `maintain` is a change, not in sync.
+- A team in both `access` and `github.access`, a slug the organization doesn't have, or any team on a repo owned by a user, fails that repo's plan with `SP0207`. Slugs are only checked when the token may list the organization's teams; otherwise a wrong one fails at apply with a 404.
+- A lower layer replaces the whole `access` map, like every other rule. A team named only in the baseline is unmanaged on a repo whose override sets `access`, not removed; use `none` to remove it.
+
 ## Apply
 
-`apply` writes only the `setpoint` ruleset: `POST /repos/{owner}/{repo}/rulesets` to create it, `PUT .../rulesets/{id}` to update it, and `DELETE .../rulesets/{id}` when the policy leaves it no rule. The planned payload is sent exactly as the plan holds it, and nothing is recomputed. The adapter refuses any planned object that isn't the `setpoint` ruleset, so other rulesets, classic branch protection and repo settings are never written.
+`apply` writes the `setpoint` ruleset: `POST /repos/{owner}/{repo}/rulesets` to create it, `PUT .../rulesets/{id}` to update it, and `DELETE .../rulesets/{id}` when the policy leaves it no rule. It writes a named team's access with `PUT /orgs/{org}/teams/{slug}/repos/{owner}/{repo}` and the planned `{ "permission": ... }`, or removes it with `DELETE` on the same path. The planned payload is sent exactly as the plan holds it, and nothing is recomputed. The adapter refuses any planned object that is neither, so other rulesets, classic branch protection and repo settings are never written.
 
 A created ruleset has no bypass actors unless the policy declares `github.bypassActors`. An existing ruleset keeps the bypass actors it has while the policy leaves them undeclared, because they are reported as unmanaged rather than removed silently.
 
-A failed write fails that repo, and the repo's later writes are not attempted. A 403 names the permission the token needs: Administration: write, or the `repo` scope on a classic token.
+A failed write fails that repo, and the repo's later writes are not attempted. A 403 names the permission the token needs: Administration: write, or the `repo` scope on a classic token. Team access also needs Members: read on the organization (`read:org` on a classic token), and an account that is an organization owner or a maintainer of the team with admin on the repo.
 
 ## Unmanaged settings
 
@@ -87,13 +115,14 @@ GitHub leaves some fields out of a 200 response rather than refusing the call:
 
 - `bypass_actors` are only shown to callers with write access. Without them, `github.bypassActors` is reported as unknown (`SP2202`) and not changed.
 - The repo merge flags are only shown with Contents read. Without them there is nothing to compare, so `SP2102` can't be checked.
+- A repo's teams may not be listable with a read-only token (403). Then `access` and `github.access` are reported as unknown (`SP2202`) and not changed.
 
 ## Token permissions
 
 | Command | Fine-grained PAT or App | Classic PAT |
 |---|---|---|
-| `plan` | Metadata: read. Add Contents: read to check the merge flags, and Administration: read for bypass actors (unconfirmed, see below). | `repo` per `X-Accepted-OAuth-Scopes`; `public_repo` is unconfirmed for public repos |
-| `apply` | Administration: write, plus a role that may edit repository rules | `repo` |
+| `plan` | Metadata: read. Add Contents: read to check the merge flags, Administration: read for bypass actors and the repo's teams (unconfirmed, see below), and Members: read on the organization to check team slugs. | `repo` per `X-Accepted-OAuth-Scopes`, plus `read:org` for team slugs; `public_repo` is unconfirmed for public repos |
+| `apply` | Administration: write, plus a role that may edit repository rules. For `access`, also Members: read, and an organization owner or team maintainer | `repo`, plus `read:org` for `access` |
 
 Calls made on 2026-11-08 against `Quattordici/Setpoint` answered `X-Accepted-GitHub-Permissions: metadata=read` and `X-Accepted-OAuth-Scopes: repo` for `GET /repos/{owner}/{repo}`, `/rulesets` and `/rules/branches/{branch}`. Two questions need a live call with a dedicated token:
 

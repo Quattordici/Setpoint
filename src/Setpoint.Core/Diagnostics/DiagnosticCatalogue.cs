@@ -37,6 +37,7 @@ public static class DiagnosticCatalogue
         new(DiagnosticCodes.EmptyRepoSkipped, DiagnosticSeverity.Warning, "Empty repo skipped"),
         new(DiagnosticCodes.ForkSkipped, DiagnosticSeverity.Info, "Fork skipped"),
         new(DiagnosticCodes.PipelineNotFound, DiagnosticSeverity.Error, "Pipeline not found"),
+        new(DiagnosticCodes.PrincipalNotFound, DiagnosticSeverity.Error, "Principal not found"),
         new(DiagnosticCodes.TargetUnreachable, DiagnosticSeverity.Error, "Target unreachable"),
         new(DiagnosticCodes.RepoReadFailed, DiagnosticSeverity.Error, "Repo read failed"),
         new(DiagnosticCodes.WriteFailed, DiagnosticSeverity.Error, "Write failed"),
