@@ -76,6 +76,23 @@ Rules apply to each repo's default branch. Setpoint owns a policy configuration 
 - Policies with a wider scope (project-wide, a branch prefix, shared with other repos) and policy types Setpoint doesn't manage are **unmanaged**. Plan lists them, and SP2101 warns when one is stricter than the policy.
 - Another identity's Force push deny on the branch is unmanaged. An explicit **Allow** for Force push, which a branch's creator gets, isn't overridden by the deny. Plan names the identity in SP2103 and leaves the entry alone.
 
+### Access
+
+The `access` rule maps each named group or user to a role, written as allow bits on the identity's entry on the repo's token (`repoV2/{project}/{repo}`) in the Git Repositories namespace. A bare name is looked up in the repo's project, so `Contributors` is `[Payments]\Contributors`; write `[Scope]\Name` for one outside it. A name that matches no identity, or several, fails the repo's plan with SP0207.
+
+| Role | Allow bits |
+| --- | --- |
+| `read` | Read (2) |
+| `write` | Read, Contribute (4), Create branch (16), Create tag (32), Manage notes (64), Contribute to pull requests (16384): what the built-in Contributors group has |
+| `admin` | Write, plus Delete or disable repository (512), Rename repository (1024), Edit policies (2048), Remove others' locks (4096), Manage permissions (8192) |
+| `none` | none of the above |
+
+- Setpoint owns only those bits. Deny bits, Force push (8, the `protectFromForcePushAndDelete` rule's), Bypass policies (128, 32768) and Create repository (256) keep their live values, and `none` clears the role's bits rather than removing the entry.
+- Live bits that are no role read as `custom (0x…)`, so a plan shows the change instead of calling them in sync.
+- Identities the policy doesn't name are left alone, and plan lists them as unmanaged.
+- Permissions on the project token (`repoV2/{project}`) are inherited by every repo in the project. Plan lists them for the identities the policy names, and SP2101 warns when one grants more than the policy's role, because that access still applies.
+- Without Security (manage) the repo token can't be read, and `access` is reported as unknown (SP2202).
+
 Policies are read with the project-wide `GET {project}/_apis/policy/configurations`, which is released at 7.0, and filtered by scope in Setpoint. A project's policies, pipelines and Project Valid Users group are read once per run, however many of its repos are planned.
 
 ## Applying
@@ -88,11 +105,12 @@ Policies are read with the project-wide `GET {project}/_apis/policy/configuratio
 | Update a policy | `PUT {project}/_apis/policy/configurations/{id}`, the whole configuration. Settings Setpoint doesn't manage were copied from the live policy at plan time, and the plan's fingerprint makes sure they haven't changed since |
 | Delete a policy | `DELETE {project}/_apis/policy/configurations/{id}` |
 | Force push entry | `POST _apis/accesscontrolentries/2e9eb7ed-3c0a-47d4-87c1-0ffdd275fd87` with `merge: false`, which replaces Project Valid Users' entry on the default branch's token and leaves every other entry alone. The entry is the live one with only the Force push bit changed. Merging can't be used, because it ORs bits in and could never take the deny off |
+| Access entry | The same request on the repo's token, `repoV2/{project}/{repo}`, for one identity: the live entry with the role's bits set and every other bit kept |
 
-- Before sending anything, Setpoint checks that the object is about this repo's default branch: a policy must be scoped to exactly that branch, and the Force push entry must be on its token. Anything else in a plan file is refused without a request.
+- Before sending anything, Setpoint checks that the object is about this repo's default branch: a policy must be scoped to exactly that branch, the Force push entry must be on its token, and an access entry must be on the repo's token for the identity the plan matched. Anything else in a plan file is refused without a request.
 - A create is refused as stale (exit 3) when an object with the same match now exists, or when several do, so an ambiguous match is never written.
 - The first failed write stops that repo, and its later objects aren't attempted. Other repos carry on unless `--fail-fast` is set.
-- A 401 or 403 names what is missing: for policies, Code (read & write) (`vso.code_write`) and the Edit policies permission; for the Force push entry, Security (manage) (`vso.security_manage`) and Manage permissions. A 404 on an update or delete means the policy is gone: plan again.
+- A 401 or 403 names what is missing: for policies, Code (read & write) (`vso.code_write`) and the Edit policies permission; for the Force push and access entries, Security (manage) (`vso.security_manage`) and Manage permissions. A 404 on an update or delete means the policy is gone: plan again.
 
 POSTs aren't retried after a server error, because the first one may have half-worked; plan again to see what was written.
 
@@ -103,9 +121,10 @@ These are checked against stubs, not yet against a real server:
 - that `connectionData` and `OPTIONS _apis/policy` answer without an `api-version` on Server 2022 and on Services;
 - that Server 2022 reports `releasedVersion` 7.0 for the policy area, and Server 2022.1 reports 7.1;
 - that `deploymentType` comes back as `hosted` or `onPremises`;
-- the branch security token's encoding, and that `[Project]\Project Valid Users` is found by a general identity search on Server and on Services (`vssps.dev.azure.com`).
+- the branch security token's encoding, and that `[Project]\Project Valid Users` is found by a general identity search on Server and on Services (`vssps.dev.azure.com`);
+- that the `access` role bits match what the web UI shows for each permission, and that a bare group name is found as `[Project]\Name` (this plan needs Security (manage) to read the repo token).
 
 - that `merge: false` on Access Control Entries - Set replaces only the listed identity's entry, as the REST reference says;
 - that a policy update's `PUT` accepts the configuration as Setpoint reads it, with `settings.scope` as the only scope.
 
-Run a plan with a read-only PAT to check the first four; the plan only reads. The last two need an apply on a server you may change, such as the Express VM. Recorded fixtures replace the stubs in [#75](https://github.com/Quattordici/Setpoint/issues/75).
+Run a plan with a read-only PAT to check the first five; the plan only reads. The last two need an apply on a server you may change, such as the Express VM. Recorded fixtures replace the stubs in [#75](https://github.com/Quattordici/Setpoint/issues/75).

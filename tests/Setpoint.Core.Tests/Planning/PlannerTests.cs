@@ -261,6 +261,48 @@ public sealed class PlannerTests
     }
 
     /// <summary>
+    /// Given an unmanaged grant of admin to platform, as a project-level permission, and a policy giving platform write,
+    /// when the repo is planned,
+    /// then SP2101 says that access still applies, because Setpoint doesn't take it away.
+    /// </summary>
+    [Fact(DisplayName = "👎 An unmanaged grant above the policy's role raises SP2101")]
+    public async Task Plan_UnmanagedAccessGrant_WarnsSP2101()
+    {
+        // Arrange
+        _builder.WithBaseline(Baseline("access: { platform: write }"));
+        _adapter.AddRepo(Repo).WithLive("access", """{ "platform": "write" }""")
+            .Unmanaged.Add(new UnmanagedSetting("access", "permissions inherited from project Payments", System.Text.Json.Nodes.JsonNode.Parse("""{ "platform": "admin" }""")));
+
+        // Act
+        PlanResult result = await PlanAsync();
+
+        // Assert
+        Diagnostic warning = result.Diagnostics.ShouldHaveSingleItem();
+        warning.Code.ShouldBe(DiagnosticCodes.UnmanagedStricter);
+        warning.Message.ShouldContain("that access still applies");
+    }
+
+    /// <summary>
+    /// Given an unmanaged grant of read to platform, and a policy giving platform write,
+    /// when the repo is planned,
+    /// then nothing is raised, because the policy's role already covers it.
+    /// </summary>
+    [Fact(DisplayName = "👍 An unmanaged grant below the policy's role raises nothing")]
+    public async Task Plan_UnmanagedAccessGrantBelow_RaisesNothing()
+    {
+        // Arrange
+        _builder.WithBaseline(Baseline("access: { platform: write }"));
+        _adapter.AddRepo(Repo).WithLive("access", """{ "platform": "write" }""")
+            .Unmanaged.Add(new UnmanagedSetting("access", "permissions inherited from project Payments", System.Text.Json.Nodes.JsonNode.Parse("""{ "platform": "read" }""")));
+
+        // Act
+        PlanResult result = await PlanAsync();
+
+        // Assert
+        result.Diagnostics.ShouldBeEmpty();
+    }
+
+    /// <summary>
     /// Given a rule that two live objects match,
     /// when the repo is planned,
     /// then SP2201 warns and nothing is created or changed for that rule.

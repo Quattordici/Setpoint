@@ -14,6 +14,12 @@ namespace Setpoint.Adapters.AzureDevOps.Policies;
 /// </param>
 internal sealed record RepoContext(AdoRepository Repo, IReadOnlyList<AdoBuildDefinition> Pipelines, string? ValidUsersDescriptor)
 {
+    /// <summary>The identities the access rule's names resolved to, by the name as the policy writes it.</summary>
+    public IReadOnlyDictionary<string, Principal> Principals { get; init; } = new Dictionary<string, Principal>();
+
+    /// <summary>The repo's token in the Git Repositories security namespace.</summary>
+    public string RepoToken => RepoAccessAcl.RepoToken(Repo.Project.Id, Repo.Id);
+
     /// <summary>The default branch, such as <c>refs/heads/main</c>.</summary>
     public string RefName => Repo.DefaultBranch ?? throw new InvalidOperationException($"The repo '{Repo.Name}' has no default branch.");
 
