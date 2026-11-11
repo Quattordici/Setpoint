@@ -125,6 +125,64 @@ internal sealed class GitHubApiClient(HttpClient http) : IDisposable
         return rules;
     }
 
+    /// <summary>
+    /// The teams with access to a repo, with their permission, or null when the token may not list them (403) or the
+    /// owner has no teams (404).
+    /// </summary>
+    public Task<List<GitHubTeam>?> ListRepoTeamsAsync(string owner, string name, CancellationToken cancellationToken) =>
+        TryPagesAsync($"{RepoPath(owner, name)}/teams?per_page={PageSize}", cancellationToken);
+
+    /// <summary>Every team in an organization, or null when the token may not list them (403, 404).</summary>
+    public Task<List<GitHubTeam>?> ListOrgTeamsAsync(string org, CancellationToken cancellationToken) =>
+        TryPagesAsync($"orgs/{Segment(org)}/teams?per_page={PageSize}", cancellationToken);
+
+    /// <summary>Gives a team a permission on a repo, adding the repo to the team if needed. The payload is sent as given.</summary>
+    public Task<HttpResponseMessage> SetTeamRepoAsync(string org, string slug, string owner, string name, JsonObject payload, CancellationToken cancellationToken) =>
+        SendAsync(HttpMethod.Put, TeamRepoPath(org, slug, owner, name), payload, cancellationToken);
+
+    /// <summary>Removes a repo from a team, which takes the team's access to it away.</summary>
+    public Task<HttpResponseMessage> RemoveTeamRepoAsync(string org, string slug, string owner, string name, CancellationToken cancellationToken) =>
+        SendAsync(HttpMethod.Delete, TeamRepoPath(org, slug, owner, name), null, cancellationToken);
+
+    /// <summary>
+    /// A repo's deployment environments as GitHub returns them, or null when the token may not list them (403) or
+    /// the repo's plan has none (404).
+    /// </summary>
+    public async Task<List<JsonObject>?> ListEnvironmentsAsync(string owner, string name, CancellationToken cancellationToken)
+    {
+        var environments = new List<JsonObject>();
+        string? next = $"{RepoPath(owner, name)}/environments?per_page={PageSize}";
+        while (next is not null)
+        {
+            using HttpResponseMessage response = await SendAsync(next, cancellationToken).ConfigureAwait(false);
+            if (response.StatusCode is HttpStatusCode.Forbidden or HttpStatusCode.NotFound)
+            {
+                return null;
+            }
+
+            environments.AddRange((await HttpJson.ReadAsync(response, GitHubApiJsonContext.Default.GitHubEnvironments, cancellationToken).ConfigureAwait(false)).Environments);
+            next = NextPage(response);
+        }
+
+        return environments;
+    }
+
+    /// <summary>Creates an environment, or replaces its protection, from the payload exactly as given.</summary>
+    public Task<HttpResponseMessage> SetEnvironmentAsync(string owner, string name, string environment, JsonObject payload, CancellationToken cancellationToken) =>
+        SendAsync(HttpMethod.Put, $"{RepoPath(owner, name)}/environments/{Segment(environment)}", payload, cancellationToken);
+
+    /// <summary>
+    /// A user by login, with the id environment reviewers are written by, or null when there is no such user. With
+    /// App auth the call is signed with <paramref name="signAs"/>'s installation, since the user has none.
+    /// </summary>
+    public async Task<GitHubUser?> FindUserAsync(string login, string signAs, CancellationToken cancellationToken)
+    {
+        using HttpResponseMessage response = await SendAsync(HttpMethod.Get, $"users/{Segment(login)}", null, signAs, asApp: false, cancellationToken).ConfigureAwait(false);
+        return response.StatusCode == HttpStatusCode.NotFound
+            ? null
+            : await HttpJson.ReadAsync(response, GitHubApiJsonContext.Default.GitHubUser, cancellationToken).ConfigureAwait(false);
+    }
+
     /// <summary>Creates a repo ruleset from the payload, exactly as given.</summary>
     public Task<HttpResponseMessage> CreateRulesetAsync(string owner, string name, JsonObject payload, CancellationToken cancellationToken) =>
         SendAsync(HttpMethod.Post, $"{RepoPath(owner, name)}/rulesets", payload, cancellationToken);
@@ -214,6 +272,28 @@ internal sealed class GitHubApiClient(HttpClient http) : IDisposable
     public void Dispose() => http.Dispose();
 
     private static string RepoPath(string owner, string name) => $"repos/{Segment(owner)}/{Segment(name)}";
+
+    private static string TeamRepoPath(string org, string slug, string owner, string name) =>
+        $"orgs/{Segment(org)}/teams/{Segment(slug)}/{RepoPath(owner, name)}";
+
+    private async Task<List<GitHubTeam>?> TryPagesAsync(string first, CancellationToken cancellationToken)
+    {
+        var teams = new List<GitHubTeam>();
+        string? next = first;
+        while (next is not null)
+        {
+            using HttpResponseMessage response = await SendAsync(next, cancellationToken).ConfigureAwait(false);
+            if (response.StatusCode is HttpStatusCode.Forbidden or HttpStatusCode.NotFound)
+            {
+                return null;
+            }
+
+            teams.AddRange(await HttpJson.ReadAsync(response, GitHubApiJsonContext.Default.ListGitHubTeam, cancellationToken).ConfigureAwait(false));
+            next = NextPage(response);
+        }
+
+        return teams;
+    }
 
     private static string Segment(string value) => Uri.EscapeDataString(value);
 

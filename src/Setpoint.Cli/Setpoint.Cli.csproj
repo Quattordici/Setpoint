@@ -10,9 +10,11 @@
     <ToolCommandName>setpoint</ToolCommandName>
     <PackageId>Setpoint</PackageId>
     <Title>Setpoint</Title>
-    <Description>Setpoint, repository governance as code for GitHub and Azure DevOps. Declare pull-request rules once in YAML, then validate, plan and apply them across your repositories.</Description>
-    <PackageTags>governance;policy-as-code;github;azure-devops;branch-policy;rulesets;dotnet-tool</PackageTags>
+    <Description>Repository governance as code for Azure DevOps Server, Azure DevOps Services and GitHub. Declare pull-request rules, repository access and deployment approvals once in YAML, then validate, plan and apply them across every repository.</Description>
+    <PackageTags>governance;policy-as-code;github;azure-devops;branch-policy;rulesets;azure-devops-server;dotnet-tool</PackageTags>
     <PackageReadmeFile>README.md</PackageReadmeFile>
+    <PackageIcon>icon.png</PackageIcon>
+    <PackageReleaseNotes>https://github.com/Quattordici/Setpoint/blob/main/CHANGELOG.md</PackageReleaseNotes>
   </PropertyGroup>
 
   <ItemGroup>
@@ -28,5 +30,6 @@
 
   <ItemGroup>
     <None Include="..\..\README.md" Pack="true" PackagePath="\" />
+    <None Include="..\..\docs\images\icon.png" Pack="true" PackagePath="\" />
   </ItemGroup>
 </Project>

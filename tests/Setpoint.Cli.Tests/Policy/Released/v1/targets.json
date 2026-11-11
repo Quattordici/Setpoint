@@ -1,0 +1,95 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://raw.githubusercontent.com/Quattordici/Setpoint/main/schema/v1/targets.json",
+  "title": "Setpoint targets",
+  "description": "The named platform endpoints a Setpoint policy applies to.",
+  "type": "object",
+  "properties": {
+    "version": {
+      "const": 1,
+      "description": "The policy format version. Must be 1."
+    },
+    "targets": {
+      "type": "object",
+      "additionalProperties": {
+        "type": "object",
+        "properties": {
+          "platform": {
+            "enum": [
+              "github",
+              "azuredevops"
+            ],
+            "description": "Which platform the target is."
+          },
+          "url": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "format": "uri",
+            "description": "The endpoint URL: an Azure DevOps organization or collection URL. Defaults to github.com on GitHub."
+          },
+          "auth": {
+            "enum": [
+              "pat",
+              "accessToken",
+              "integrated",
+              "app",
+              "entra",
+              null
+            ],
+            "description": "How Setpoint signs in. Defaults to pat."
+          },
+          "scope": {
+            "type": [
+              "array",
+              "null"
+            ],
+            "items": {
+              "type": "string"
+            },
+            "description": "Globs over <project-or-owner>/<repo> for the repos this target manages. Required on GitHub; defaults to the whole collection on Azure DevOps."
+          },
+          "exclude": {
+            "type": [
+              "array",
+              "null"
+            ],
+            "items": {
+              "type": "string"
+            },
+            "description": "Globs over <project-or-owner>/<repo> that are left out of scope."
+          },
+          "tokenEnv": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "description": "The environment variable that holds the token, instead of SETPOINT_<TARGET>_TOKEN."
+          },
+          "appId": {
+            "type": [
+              "integer",
+              "null"
+            ],
+            "description": "The GitHub App id, for auth: app. The private key comes from SETPOINT_<TARGET>_APP_KEY."
+          },
+          "includeForks": {
+            "type": "boolean",
+            "description": "Whether forks in scope are managed. They are skipped by default."
+          }
+        },
+        "required": [
+          "platform"
+        ],
+        "additionalProperties": false
+      },
+      "description": "The targets, keyed by name. Selectors and repo override paths start with the target name."
+    }
+  },
+  "required": [
+    "version",
+    "targets"
+  ],
+  "additionalProperties": false
+}

@@ -66,6 +66,7 @@ public sealed class AzureDevOpsReadTests : IAsyncLifetime
             .BuildDefinitions(_projectId, (11, "payments-ci"))
             .ValidUsers("Payments", ValidUsers)
             .Acl(ForcePushAcl.BranchToken(_projectId, repoId, "main"), (ValidUsers, 0, 8), (Creator, 8, 0))
+            .Acl(RepoAccessAcl.RepoToken(_projectId, repoId))
             .Identities((ValidUsers, "[Payments]\\Project Valid Users"), (Creator, "Mattias"));
 
         // Act
@@ -97,7 +98,7 @@ public sealed class AzureDevOpsReadTests : IAsyncLifetime
 
         // Assert
         live.Objects.ShouldHaveSingleItem().MatchKey.ShouldBe("ado:minimumReviewers/refs/heads/main");
-        live.UnknownRules.ShouldBe(["protectFromForcePushAndDelete"]);
+        live.UnknownRules.ShouldBe(["protectFromForcePushAndDelete", "access", "environments"]);
     }
 
     /// <summary>
@@ -134,7 +135,7 @@ public sealed class AzureDevOpsReadTests : IAsyncLifetime
 
         // Assert
         _server.LogEntries.Count(e => e.RequestMessage!.Path.EndsWith("/_apis/build/definitions", StringComparison.Ordinal)).ShouldBe(1);
-        _server.LogEntries.Count(e => e.RequestMessage!.Path.EndsWith("/_apis/accesscontrollists/" + ForcePushAcl.NamespaceId, StringComparison.Ordinal)).ShouldBe(2);
+        _server.LogEntries.Count(e => e.RequestMessage!.Path.EndsWith("/_apis/accesscontrollists/" + ForcePushAcl.NamespaceId, StringComparison.Ordinal)).ShouldBe(4, "the branch and repo tokens of each repo");
     }
 
     /// <summary>
@@ -175,6 +176,7 @@ public sealed class AzureDevOpsReadTests : IAsyncLifetime
             .BuildDefinitions(_projectId)
             .ValidUsers("Payments", ValidUsers)
             .Acl(ForcePushAcl.BranchToken(_projectId, repoId, "main"), (ValidUsers, 0, 8))
+            .Acl(RepoAccessAcl.RepoToken(_projectId, repoId))
             .Identities((ValidUsers, "[Payments]\\Project Valid Users"));
 
         // Act

@@ -30,6 +30,9 @@ jobs:
 
     steps:
       - uses: actions/checkout@v4
+        with:
+          # MinVer computes the version from the tags and history.
+          fetch-depth: 0
 
       - uses: actions/setup-dotnet@v4
         with:

@@ -15,7 +15,10 @@ Fine-grained PATs and GitHub Apps use the same permission names.
 | `plan` | **Metadata: read** | Read | Lists repos and reads rulesets. |
 | `plan`, recommended | + **Contents: read** | Read | Without it GitHub leaves the repo merge flags (`allow_*_merge`) out of its answer, so `SP2102` (no merge method left) can't be checked. |
 | `plan`, to see bypass actors | + **Administration: read** | Admin, or a custom role with *Edit repository rules* | GitHub only shows `bypass_actors` to callers with write access to the ruleset. Without it, `github.bypassActors` is reported as unknown (`SP2202`). Unconfirmed whether read is enough. |
+| `plan`, for `access` | + **Administration: read**, and **Members: read** on the organization | Read | Lists the repo's teams, and the organization's teams to check slugs (`SP0207`). Without the first, `access` is reported as unknown (`SP2202`). |
 | `apply` | **Administration: write** + Metadata: read + Contents: read | Admin, or a custom role with *Edit repository rules* | Creates, updates and deletes the `setpoint` ruleset. |
+| `apply`, for `access` | + **Members: read** on the organization | Organization owner, or a maintainer of each named team with admin on the repo | Adds the repo to a team with its role, or removes it. |
+| `apply`, for `environments` | + **Members: read** on the organization, to resolve team reviewers | Admin on the repo | Creates environments and sets their reviewers, wait timer and branch policy. Which permission lists them for `plan` (Actions or Environments: read) is unconfirmed. |
 
 A fine-grained PAT's resource owner must be the organization, and the organization may have to approve the token before it works on private repos.
 
@@ -46,7 +49,9 @@ The Actions job token has no Administration permission, so it can't run `apply`.
 |---|---|---|
 | `plan` | **Code (read)** `vso.code` + **Build (read)** `vso.build` | Lists repos, reads policies and policy types, and resolves `requiredChecks` names to pipelines. |
 | `plan`, to see force-push protection | + **Identity (read)** `vso.identity` + **Security (manage)** `vso.security_manage` | Reads the default branch's security entries. There is no read-only security scope, so a read-only plan reports `protectFromForcePushAndDelete` as unknown (`SP2202`) instead. |
-| `apply` | **Code (read & write)** `vso.code_write` + **Build (read)** + **Identity (read)** + **Security (manage)** | Writes policy configurations and the Force push deny. |
+| `plan`, for `access` | + **Identity (read)** `vso.identity` + **Security (manage)** `vso.security_manage` | Resolves the named groups and users (`SP0207`), and reads the repo's and project's security entries. Without them `access` is reported as unknown (`SP2202`). |
+| `plan`, for `environments` | + **Environment (read & manage)** `vso.environment_manage` | Reads the project's environments and their checks; there is no read-only environment scope (unconfirmed). Without it, `environments` is reported as unknown (`SP2202`). |
+| `apply` | **Code (read & write)** `vso.code_write` + **Build (read)** + **Identity (read)** + **Security (manage)**, + **Environment (read & manage)** for `environments` | Writes policy configurations, the Force push deny, access entries, and environments with their Approval checks. |
 
 `vso.code_manage` isn't needed. On Azure DevOps Server 2022 before Update 1, some REST APIs had no granular scope and may need a **Full access** PAT; whether the security APIs Setpoint calls are among them is unconfirmed.
 
@@ -55,7 +60,7 @@ The Actions job token has no Administration permission, so it can't run `apply`.
 | Command | Permission | Where |
 |---|---|---|
 | `plan` | **Read** on the repos, and **View builds** on the pipelines `requiredChecks` names | Granted to Readers and Contributors by default. |
-| `apply` | + **Edit policies** and **Manage permissions** | Project Settings → Repositories → Security, on the top-level *Git repositories* node so every repo inherits it, or per repo. Project Administrators have both by default. |
+| `apply` | + **Edit policies** and **Manage permissions** | Project Settings → Repositories → Security, on the top-level *Git repositories* node so every repo inherits it, or per repo. Project Administrators have both by default. Manage permissions covers both the Force push deny and `access`. For `environments`, the identity also needs the **Creator** role on the project's environments (Pipelines → Environments → Security) to create one, and **Administrator** on each environment to change its checks. |
 
 Policies marked `isEnterpriseManaged` also need *Manage Enterprise Policies*. Setpoint reports them as unmanaged and doesn't write them.
 

@@ -19,6 +19,7 @@ internal static class ObjectMapper
     {
         var objects = new List<DesiredObject>();
         IReadOnlyDictionary<string, DesiredRule> rules = desired.Rules;
+
         LiveObject? Live(string matchKey) => live.Objects.FirstOrDefault(o => o.MatchKey == matchKey);
 
         MapMinimumReviewers(rules, context, Live, objects);
@@ -27,6 +28,23 @@ internal static class ObjectMapper
         MapBuilds(desired, live, context, objects);
         MapStatusChecks(rules, live, context, objects);
         MapForcePush(rules, context, Live, objects);
+        if (rules.GetValueOrDefault(RepoAccessAcl.Access)?.Value is JsonObject { Count: > 0 } access && !live.UnknownRules.Contains(RepoAccessAcl.Access))
+        {
+            objects.AddRange(RepoAccessAcl.Map(access, context.Principals, live, context.RepoToken));
+        }
+
+        if (rules.GetValueOrDefault(EnvironmentApproval.Environments)?.Value is JsonObject { Count: > 0 } environments
+            && !live.UnknownRules.Contains(EnvironmentApproval.Environments))
+        {
+            objects.AddRange(EnvironmentApproval.Map(
+                environments,
+                context.Reviewers,
+                live,
+                (context.Repo.Project.Id, context.Repo.Project.Name),
+                context.AmbiguousEnvironments.Keys.ToHashSet(StringComparer.Ordinal),
+                context.ApproverName));
+        }
+
         return objects;
     }
 

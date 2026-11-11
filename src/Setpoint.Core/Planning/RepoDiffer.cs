@@ -36,7 +36,15 @@ public static class RepoDiffer
                 $"{ambiguous.Rule}: {ambiguous.ObjectKeys.Count} live objects match {ambiguous.Detail} ({string.Join(", ", ambiguous.ObjectKeys)}); left alone."));
         }
 
-        foreach (string unknown in live.UnknownRules.Where(desired.Rules.ContainsKey))
+        foreach (RuleWarning unavailable in live.Unavailable ?? [])
+        {
+            if (desired.Rules.TryGetValue(unavailable.Rule, out DesiredRule? declared) && leftAlone.Add(unavailable.Rule) && !declared.MustBeAbsent)
+            {
+                diagnostics.Add(unavailable.Diagnostic);
+            }
+        }
+
+        foreach (string unknown in live.UnknownRules.Where(r => desired.Rules.ContainsKey(r) && !leftAlone.Contains(r)))
         {
             leftAlone.Add(unknown);
             diagnostics.Add(Diagnostic.Warning(
@@ -100,7 +108,7 @@ public static class RepoDiffer
             changes.AddRange(objectChanges);
         }
 
-        IReadOnlyList<PlanUnmanaged> unmanaged = Unmanaged(desired, live, diagnostics);
+        IReadOnlyList<PlanUnmanaged> unmanaged = Unmanaged(desired, live, desiredObjects, diagnostics);
         return new RepoDiff(objects, changes, unmanaged, diagnostics);
     }
 
@@ -146,16 +154,19 @@ public static class RepoDiffer
         }
     }
 
-    private static List<PlanUnmanaged> Unmanaged(DesiredState desired, LiveSnapshot live, List<Diagnostic> diagnostics)
+    private static List<PlanUnmanaged> Unmanaged(DesiredState desired, LiveSnapshot live, IReadOnlyList<DesiredObject> desiredObjects, List<Diagnostic> diagnostics)
     {
         var unmanaged = new List<PlanUnmanaged>();
+        var wanted = desiredObjects.Select(o => o.MatchKey).ToHashSet(StringComparer.Ordinal);
 
-        // Rule values on live objects that the policy leaves unmanaged.
+        // Rule values on live objects that the policy leaves unmanaged. A live object no desired object matches,
+        // such as a team the access rule doesn't name, is left alone, so all of its rules are unmanaged.
         foreach (LiveObject liveObject in live.Objects)
         {
+            bool leftAlone = !wanted.Contains(liveObject.MatchKey);
             foreach ((string rule, JsonNode? value) in liveObject.Rules)
             {
-                if (!desired.Rules.ContainsKey(rule) && value is not null)
+                if ((leftAlone || !desired.Rules.ContainsKey(rule)) && value is not null)
                 {
                     unmanaged.Add(new PlanUnmanaged(rule, liveObject.Key, ValueText.Format(value)));
                 }
@@ -168,6 +179,15 @@ public static class RepoDiffer
             unmanaged.Add(new PlanUnmanaged(setting.Rule, setting.Source, ValueText.Format(setting.Value)));
             if (desired.Rules.TryGetValue(setting.Rule, out DesiredRule? declared) && Strictness.IsStricter(setting.Rule, setting.Value, declared.Value))
             {
+                if (setting.Rule == "access")
+                {
+                    diagnostics.Add(Diagnostic.Warning(
+                        DiagnosticCodes.UnmanagedStricter,
+                        $"access: unmanaged {setting.Source} grants {ValueText.Format(setting.Value)}, more than the policy's " +
+                        $"{ValueText.Format(declared.Value)}; that access still applies, because Setpoint doesn't take it away."));
+                    continue;
+                }
+
                 diagnostics.Add(Diagnostic.Warning(
                     DiagnosticCodes.UnmanagedStricter,
                     $"{setting.Rule}: unmanaged {setting.Source} sets {ValueText.Format(setting.Value)}, stricter than the policy's " +

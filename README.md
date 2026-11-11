@@ -1,23 +1,53 @@
 # Setpoint
 
-Setpoint, repository governance as code for GitHub and Azure DevOps.
+Repository governance as code for Azure DevOps and GitHub.
 
-Declare pull-request rules once in YAML, in a central policy repo, and Setpoint brings every repository on GitHub, Azure DevOps Services and Azure DevOps Server 2022 in line with them, through `validate`, `plan` and `apply`.
+Setpoint is for platform teams that look after hundreds of repositories, often on Azure DevOps Server, Azure DevOps Services and GitHub at once. You write the rules once, in YAML, in a central policy repo: how many reviewers a pull request needs, which builds must pass, which merge types are allowed, who may push, and who approves a deployment. Setpoint reads every repository in scope, shows what differs, and brings each one in line through `validate`, `plan` and `apply`, from a pipeline.
 
-> **Status:** early development, heading for 1.0. `validate`, `plan`, `apply` and `drift` work against GitHub and Azure DevOps. Progress is tracked in [the phase 4 build issue](https://github.com/Quattordici/Setpoint/issues/70).
+```yaml
+# baseline.yml: every repo in scope, on every platform
+version: 1
+layer: baseline
+rules:
+  minimumReviewers: { count: 2, resetOnPush: true }
+  requiredChecks: [{ name: build }]
+  requireCommentResolution: true
+  allowedMergeTypes: [squash]
+  protectFromForcePushAndDelete: true
+```
+
+## How it works
+
+- **Azure DevOps first.** Azure DevOps Server 2022 and later, on premises, and Azure DevOps Services, with the same policy. Branch policies, build validation, repository permissions for groups and environment approvals are all managed, and Setpoint signs in with a PAT, the pipeline's `System.AccessToken`, Windows authentication or Entra ID.
+- **One policy, many platforms.** The rules are neutral: `minimumReviewers` means a branch policy on Azure DevOps and a ruleset rule on GitHub. Each platform is a target in `targets.yml`, and settings only one platform has go in a `github:` or `azuredevops:` block beside the rule they extend.
+- **Layered.** A baseline for every repo, groups for sets of repos (by list or by glob), and an override per repo. A baseline can lock a rule so lower layers can't relax it.
+- **Managed-only.** Setpoint changes only the settings it owns, leaves anything else alone and lists it in the plan, and never guesses: a setting it can't match to one object is left alone with a warning.
+- **Plan, then apply.** `plan --out plan.json` records exactly what would change. `apply plan.json` refuses to run if the policy, the Setpoint version or any live object moved since. `drift` runs on a schedule and fails when someone changed a setting by hand.
+
+## Install
+
+Setpoint is a .NET tool and needs the .NET 10 runtime.
+
+```sh
+dotnet tool install -g Setpoint
+setpoint --version
+```
+
+In a pipeline, install a pinned version into a folder instead, so the apply stage runs the Setpoint that made the plan: see [Getting started](docs/getting-started.md) and [Pipelines](docs/pipelines.md).
 
 ## Documentation
+
+Start with [Getting started](docs/getting-started.md). Every page is listed in [the documentation index](docs/README.md):
 
 | Page | For |
 |---|---|
 | [Getting started](docs/getting-started.md) | A first policy repo, `validate`, `plan` and `apply` |
+| [Azure DevOps](docs/azure-devops.md), [GitHub](docs/github.md) | How each platform is mapped, listed and written |
 | [Permissions](docs/permissions.md) | The token scopes and the roles or ACLs each command needs, per platform and sign-in method |
 | [Pipelines](docs/pipelines.md) | Two-stage Azure Pipelines and GitHub Actions examples: plan read-only, apply behind an approval |
 | [Drift](docs/drift.md) | `setpoint drift`, its exit codes, and the scheduled drift pipelines |
 | [Diagnostics and exit codes](docs/diagnostics.md) | Every `SPxxxx` code and exit code, and what to do about it |
-| [GitHub](docs/github.md), [Azure DevOps](docs/azure-devops.md) | How each platform is mapped, listed and written |
-| [Plan files](docs/plan-file.md) | The `plan.json` format |
-| [Live gates](docs/live-gates.md) | For contributors: the test environments, the gate script and recording fixtures |
+| [Changelog](CHANGELOG.md) | What changed in each release |
 
 ## Commands
 
@@ -86,7 +116,7 @@ dotnet build Setpoint.slnx
 dotnet test --solution Setpoint.slnx
 ```
 
-To try the tool from a local package:
+To try the tool from a local package (untagged builds are prereleases, such as `1.0.1-alpha.0.3`):
 
 ```sh
 dotnet pack src/Setpoint.Cli -c Release -o artifacts/packages
@@ -103,6 +133,10 @@ artifacts/tool/setpoint --help
 | `src/Setpoint.Adapters.AzureDevOps` | Translates between the neutral model and the Azure DevOps policy and security APIs |
 | `src/Setpoint.Cli` | The `setpoint` dotnet tool (NuGet id `Setpoint`): command parsing and terminal output |
 | `tests/*` | Unit tests per project, plus architecture tests that keep the core/adapter split honest |
+
+## Releasing
+
+A `v*` tag publishes to nuget.org; see [docs/releasing.md](docs/releasing.md).
 
 ## Licence
 

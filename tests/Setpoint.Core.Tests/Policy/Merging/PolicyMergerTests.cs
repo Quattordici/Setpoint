@@ -61,6 +61,27 @@ public sealed class PolicyMergerTests
     }
 
     /// <summary>
+    /// Given a baseline access map and a repo override with another,
+    /// when they are merged,
+    /// then the override's map replaces the baseline's, so a team only the baseline names is left unmanaged.
+    /// </summary>
+    [Fact(DisplayName = "👍 A lower layer replaces the access map wholesale")]
+    public void Merge_AccessOverridden_ReplacesMap()
+    {
+        // Arrange
+        _builder
+            .WithBaseline(Baseline("access: { platform: admin }"))
+            .WithRepoOverride(Repo.ToString(), Override("access: { payments: write, platform: none }"));
+
+        // Act
+        EffectivePolicy effective = Merge();
+
+        // Assert
+        effective.Get<IReadOnlyDictionary<string, AccessRole>>("access").ShouldBe(
+            new Dictionary<string, AccessRole> { ["payments"] = AccessRole.Write, ["platform"] = AccessRole.None });
+    }
+
+    /// <summary>
     /// Given a baseline rule that a group sets to ~,
     /// when they are merged,
     /// then the rule is unmanaged for that repo.

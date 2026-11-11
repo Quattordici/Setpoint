@@ -41,7 +41,7 @@ Before any repo is listed, Setpoint takes these steps against the target. A fail
 
 1. **Sign-in and identity.** `GET _apis/connectionData` gives the signed-in identity, which the plan shows. If Azure DevOps doesn't accept the token, it answers with its sign-in page (203) or 401, or signs the request in anonymously. Setpoint reports each of these as a refused token.
 2. **Services or Server.** The same response's `deploymentType` tells hosted (Services) from on-premises (Server). The URL decides only when it is missing: `dev.azure.com` and `*.visualstudio.com` are Services.
-3. **Server release.** On Server, `OPTIONS _apis/policy` lists the REST versions the policy API has. The highest released one is the release, from Microsoft's mapping: 7.0 is Server 2022 and 7.1 is Server 2022.1. Anything older than 7.0 is refused, naming the release, unless `--allow-unsupported-server` is set. With the flag, Setpoint marks the target "(unsupported)" and uses the server's own version, because the older server refuses 7.0.
+3. **Server release.** On Server, `OPTIONS _apis/policy` lists the REST versions the policy API has. The highest released one is the release, from Microsoft's mapping (see [Compatibility](#compatibility)). Anything older than 7.0 is refused, naming the release, unless `--allow-unsupported-server` is set. With the flag, Setpoint marks the target "(unsupported)" and uses the server's own version, because the older server refuses 7.0.
 4. **Policy types.** `GET {project}/_apis/policy/types` must list each type Setpoint manages: Minimum number of reviewers, Build, Status, Comment requirements and Require a merge strategy. The Status type's id comes from Microsoft's Terraform provider rather than the REST reference, so the server is asked. A collection with no projects has nothing to manage, so this check is skipped.
 
 Every REST call pins `api-version=7.0`. The two discovery calls in steps 1 and 3 carry no version, because they run before Setpoint knows which versions the server has. Pinning 7.0 on them would make a Server 2020 fail with "version out of range" instead of being named and refused.
@@ -76,6 +76,43 @@ Rules apply to each repo's default branch. Setpoint owns a policy configuration 
 - Policies with a wider scope (project-wide, a branch prefix, shared with other repos) and policy types Setpoint doesn't manage are **unmanaged**. Plan lists them, and SP2101 warns when one is stricter than the policy.
 - Another identity's Force push deny on the branch is unmanaged. An explicit **Allow** for Force push, which a branch's creator gets, isn't overridden by the deny. Plan names the identity in SP2103 and leaves the entry alone.
 
+### Access
+
+The `access` rule maps each named group or user to a role, written as allow bits on the identity's entry on the repo's token (`repoV2/{project}/{repo}`) in the Git Repositories namespace. A bare name is looked up in the repo's project, so `Contributors` is `[Payments]\Contributors`; write `[Scope]\Name` for one outside it. A name that matches no identity, or several, fails the repo's plan with SP0207.
+
+| Role | Allow bits |
+| --- | --- |
+| `read` | Read (2) |
+| `write` | Read, Contribute (4), Create branch (16), Create tag (32), Manage notes (64), Contribute to pull requests (16384): what the built-in Contributors group has |
+| `admin` | Write, plus Delete or disable repository (512), Rename repository (1024), Edit policies (2048), Remove others' locks (4096), Manage permissions (8192) |
+| `none` | none of the above |
+
+- Setpoint owns only those bits. Deny bits, Force push (8, the `protectFromForcePushAndDelete` rule's), Bypass policies (128, 32768) and Create repository (256) keep their live values, and `none` clears the role's bits rather than removing the entry.
+- Live bits that are no role read as `custom (0x…)`, so a plan shows the change instead of calling them in sync.
+- Identities the policy doesn't name are left alone, and plan lists them as unmanaged.
+- Permissions on the project token (`repoV2/{project}`) are inherited by every repo in the project. Plan lists them for the identities the policy names, and SP2101 warns when one grants more than the policy's role, because that access still applies.
+- Without Security (manage) the repo token can't be read, and `access` is reported as unknown (SP2202).
+
+### Environments
+
+The `environments` rule manages environments of the repo's project (Pipelines → Environments) and one **Approval** check on each:
+
+| Field | Azure DevOps |
+| --- | --- |
+| `reviewers` | the Approval check's approvers, by group or user name, resolved like `access` names. All of them must approve (`minRequiredApprovers` is the number of approvers) |
+| `enabled: false` | the Approval check is removed; the environment is kept |
+| `waitMinutes` | not available: environments have no wait before a deployment. An approval's timeout is how long it waits for approvers, which is something else. Ignored with SP3002 |
+| `branches: default` | not available yet: Azure DevOps restricts branches with a separate Branch control check, which Setpoint doesn't manage. Ignored with SP3002; `any` needs nothing |
+
+- Environments belong to the project, not the repo. Every repo in the project that declares an environment must declare it the same way, or each of them fails with SP0122 naming the others. When they agree, the change is planned once, under the first repo of the project by name, and apply writes it once.
+- A missing environment is created, with its check if it has reviewers. Setpoint never deletes an environment and never touches its resources, security or other checks.
+- The Approval check's other settings (instructions, timeout, order, blocked approvers, whether the requester may approve) keep their live values. A new check gets the web UI's defaults, with a 30-day timeout.
+- Other checks, such as Business hours or Invoke REST API, are listed as unmanaged. An environment with more than one Approval check is ambiguous (SP2201) and left alone.
+- `reviewers` left out keeps the live approvers.
+- Environments not named in the policy are listed as unmanaged.
+
+The environments and checks endpoints have no released version at 7.0, so their exact preview is pinned: `_apis/distributedtask/environments` and `_apis/pipelines/checks/configurations` at `api-version=7.0-preview.1`. Every other call uses `7.0`. A project's environments and their checks are read once per run.
+
 Policies are read with the project-wide `GET {project}/_apis/policy/configurations`, which is released at 7.0, and filtered by scope in Setpoint. A project's policies, pipelines and Project Valid Users group are read once per run, however many of its repos are planned.
 
 ## Applying
@@ -88,13 +125,32 @@ Policies are read with the project-wide `GET {project}/_apis/policy/configuratio
 | Update a policy | `PUT {project}/_apis/policy/configurations/{id}`, the whole configuration. Settings Setpoint doesn't manage were copied from the live policy at plan time, and the plan's fingerprint makes sure they haven't changed since |
 | Delete a policy | `DELETE {project}/_apis/policy/configurations/{id}` |
 | Force push entry | `POST _apis/accesscontrolentries/2e9eb7ed-3c0a-47d4-87c1-0ffdd275fd87` with `merge: false`, which replaces Project Valid Users' entry on the default branch's token and leaves every other entry alone. The entry is the live one with only the Force push bit changed. Merging can't be used, because it ORs bits in and could never take the deny off |
+| Access entry | The same request on the repo's token, `repoV2/{project}/{repo}`, for one identity: the live entry with the role's bits set and every other bit kept |
+| Environment | Looks the environment up by name, `POST {project}/_apis/distributedtask/environments` to create it if it is missing, then `POST`, `PATCH .../checks/configurations/{id}` or `DELETE .../{id}` for its Approval check, on the environment's id. A check id from the plan must be an Approval check on that environment, or nothing is written |
 
-- Before sending anything, Setpoint checks that the object is about this repo's default branch: a policy must be scoped to exactly that branch, and the Force push entry must be on its token. Anything else in a plan file is refused without a request.
+- Before sending anything, Setpoint checks that the object is about this repo's default branch: a policy must be scoped to exactly that branch, the Force push entry must be on its token, and an access entry must be on the repo's token for the identity the plan matched. Anything else in a plan file is refused without a request.
 - A create is refused as stale (exit 3) when an object with the same match now exists, or when several do, so an ambiguous match is never written.
 - The first failed write stops that repo, and its later objects aren't attempted. Other repos carry on unless `--fail-fast` is set.
-- A 401 or 403 names what is missing: for policies, Code (read & write) (`vso.code_write`) and the Edit policies permission; for the Force push entry, Security (manage) (`vso.security_manage`) and Manage permissions. A 404 on an update or delete means the policy is gone: plan again.
+- A 401 or 403 names what is missing: for policies, Code (read & write) (`vso.code_write`) and the Edit policies permission; for the Force push and access entries, Security (manage) (`vso.security_manage`) and Manage permissions. A 404 on an update or delete means the policy is gone: plan again.
 
 POSTs aren't retried after a server error, because the first one may have half-worked; plan again to see what was written.
+
+## Compatibility
+
+Setpoint 1.0 supports Azure DevOps Services and these Server releases. Every release gets the same calls at the same versions: Setpoint pins Server 2022's, which every later release still accepts, so a newer server behaves like 2022 rather than in a way nobody tested.
+
+| Release | Preflight names it | Highest REST version | api-versions Setpoint uses | Known differences |
+|---|---|---|---|---|
+| Azure DevOps Services | Azure DevOps Services | latest | `7.0`, `7.0-preview.1` for environments and checks | `auth: entra` works only here. Identities are searched on `vssps.dev.azure.com`. |
+| Azure DevOps Server (2025) | Azure DevOps Server (2025) | 7.2 | `7.0`, `7.0-preview.1` for environments and checks | None known yet |
+| Azure DevOps Server 2022.2 | Azure DevOps Server 2022.1 or 2022.2 | 7.1 | `7.0`, `7.0-preview.1` for environments and checks | None known yet |
+| Azure DevOps Server 2022.1 | Azure DevOps Server 2022.1 or 2022.2 | 7.1 | `7.0`, `7.0-preview.1` for environments and checks | None known yet |
+| Azure DevOps Server 2022 | Azure DevOps Server 2022 | 7.0 | `7.0`, `7.0-preview.1` for environments and checks | The oldest supported release |
+| Server 2020 and older | Azure DevOps Server 2020, 2019 or Team Foundation Server | 6.0 or less | Refused, unless `--allow-unsupported-server` | Runs at the server's own version, untested |
+
+2022.2 is an update to 2022.1 that added no REST version, so the preflight can't tell them apart and names both. Setpoint uses the same calls on both, and each has its own row in the live gate.
+
+Each row is checked by [the live gate](live-gates.md#azure-devops-server-releases) on its own Express VM, and the recordings from those runs are what the adapter tests replay. Until a release's recordings are in, its row says "None known yet": the tests for it run against fixtures built by hand from the REST reference.
 
 ## Still to verify on a live server
 
@@ -103,9 +159,11 @@ These are checked against stubs, not yet against a real server:
 - that `connectionData` and `OPTIONS _apis/policy` answer without an `api-version` on Server 2022 and on Services;
 - that Server 2022 reports `releasedVersion` 7.0 for the policy area, and Server 2022.1 reports 7.1;
 - that `deploymentType` comes back as `hosted` or `onPremises`;
-- the branch security token's encoding, and that `[Project]\Project Valid Users` is found by a general identity search on Server and on Services (`vssps.dev.azure.com`).
+- the branch security token's encoding, and that `[Project]\Project Valid Users` is found by a general identity search on Server and on Services (`vssps.dev.azure.com`);
+- that the `access` role bits match what the web UI shows for each permission, and that a bare group name is found as `[Project]\Name` (this plan needs Security (manage) to read the repo token).
 
 - that `merge: false` on Access Control Entries - Set replaces only the listed identity's entry, as the REST reference says;
+- that the environments and checks previews accept the payloads as Setpoint writes them, that `minRequiredApprovers` set to the number of approvers means all of them, and which scope reads environments;
 - that a policy update's `PUT` accepts the configuration as Setpoint reads it, with `settings.scope` as the only scope.
 
-Run a plan with a read-only PAT to check the first four; the plan only reads. The last two need an apply on a server you may change, such as the Express VM. Recorded fixtures replace the stubs in [#75](https://github.com/Quattordici/Setpoint/issues/75).
+Run a plan with a read-only PAT to check the first five; the plan only reads. The last three need an apply on a server you may change, such as the Express VM. Recorded fixtures replace the stubs in [#75](https://github.com/Quattordici/Setpoint/issues/75).

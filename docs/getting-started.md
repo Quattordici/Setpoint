@@ -9,11 +9,11 @@ This walks through a first policy repo, from `validate` to a first `apply`. It t
 Setpoint is a .NET tool and needs the .NET 10 runtime. Install a pinned version into a folder, so a pipeline always runs the same Setpoint that made its plan:
 
 ```sh
-dotnet tool install Setpoint --version 0.1.0-alpha --tool-path ./.setpoint
+dotnet tool install Setpoint --version 1.0.0 --tool-path ./.setpoint
 ./.setpoint/setpoint --version
 ```
 
-Until the package is on nuget.org, build it from this repo instead and add `--add-source artifacts/packages --prerelease` (see [Building](../README.md#building)).
+To try an unreleased build, pack it from this repo and add `--add-source artifacts/packages --prerelease` (see [Building](../README.md#building)).
 
 ## 2. Create the policy repo
 
@@ -48,7 +48,7 @@ targets:
 
 Edit `scope:` and `url:` to match your estate. On Azure DevOps Server, `url:` is the collection URL, such as `https://ado.example.com/tfs/DefaultCollection`. Platform details are in [github.md](github.md) and [azure-devops.md](azure-devops.md).
 
-The baseline holds the five neutral rules. Setpoint translates each one into a ruleset rule on GitHub and a branch policy or permission on Azure DevOps:
+The baseline holds the neutral rules. Setpoint translates each one into a ruleset rule on GitHub and a branch policy or permission on Azure DevOps. Two more apply to the whole repo: `access` gives teams (GitHub) or groups and users (Azure DevOps) a role on the repo (see [GitHub](github.md#team-access) and [Azure DevOps](azure-devops.md#access)), and `environments` sets deployment approvals (see [GitHub](github.md#environments) and [Azure DevOps](azure-devops.md#environments)):
 
 ```yaml
 version: 1
@@ -103,7 +103,7 @@ setpoint plan --policy ./policy-repo --out plan.json
 The plan header shows what each target turned out to be and who Setpoint signed in as. Then each repo that would change is listed with its changes, the layer each value comes from, and the native object that would be written. In-sync repos are counted, not listed; add `--verbose` to see them. With `--output plain`, or whenever the output isn't a terminal, each line stands alone. An example (your names and counts will differ):
 
 ```text
-setpoint 0.1.0-alpha plan policy=3f9c2a1 files=5 repos=14
+setpoint 1.0.0 plan policy=3f9c2a1 files=5 repos=14
 target github detected="github.com" api=2022-11-28 auth=pat identity=platform-bot repos=9
 target ado detected="Azure DevOps Services" api=7.0 auth=pat identity=platform-bot@acme.com repos=5
 + github/acme/payments-api minimumReviewers: (none) -> count 1, resetOnPush [baseline] (locked) (create setpoint ruleset (new))

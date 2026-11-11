@@ -35,6 +35,14 @@ public interface IProviderAdapter
     Task<LiveSnapshot> ReadAsync(RepoRef repo, CancellationToken cancellationToken);
 
     /// <summary>
+    /// Looks up what mapping the repo's desired state needs from the platform, such as the identities behind the names
+    /// the <c>access</c> rule uses, so <see cref="MapObjects"/> can stay pure. It may return <paramref name="live"/> with
+    /// unmanaged settings added that only matter for what the policy declares; it must not change the live objects.
+    /// </summary>
+    /// <exception cref="PolicyMappingException">A name the policy uses doesn't resolve (SP0207).</exception>
+    Task<LiveSnapshot> PrepareAsync(DesiredState desired, LiveSnapshot live, CancellationToken cancellationToken) => Task.FromResult(live);
+
+    /// <summary>
     /// Maps the desired state to the native objects that should exist, each with the payload apply would send.
     /// <paramref name="live"/> is there so an owned object can keep the parts the policy leaves unmanaged.
     /// Objects whose rules already match live state are dropped by the core, so this can map every rule.

@@ -14,7 +14,7 @@ pool:
 
 variables:
   # Pin the version: apply refuses a plan made by another Setpoint version.
-  setpointVersion: 0.1.0-alpha
+  setpointVersion: 1.0.0
   setpoint: $(Agent.ToolsDirectory)/setpoint/setpoint
 
 stages:

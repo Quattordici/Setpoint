@@ -70,7 +70,7 @@ internal sealed class FakeProviderAdapter(Platform platform = Platform.GitHub, I
                 new Dictionary<string, JsonNode?> { [o.Rule] = o.Value?.DeepClone() },
                 $"Fake {o.Rule} #{o.Id}")),
         ];
-        return Task.FromResult(new LiveSnapshot(objects, fake.Unmanaged, fake.Ambiguous, fake.Unknown, fake.Warnings));
+        return Task.FromResult(new LiveSnapshot(objects, fake.Unmanaged, fake.Ambiguous, fake.Unknown, fake.Warnings, fake.Unavailable));
     }
 
     public IReadOnlyList<DesiredObject> MapObjects(DesiredState desired, LiveSnapshot live) => _repos[desired.Repo].MappingFailure is { } failure
@@ -81,8 +81,12 @@ internal sealed class FakeProviderAdapter(Platform platform = Platform.GitHub, I
             $"fake:new/{rule.Key}",
             new Dictionary<string, JsonNode?> { [rule.Key] = rule.Value?.DeepClone() },
             rule.Value is null ? null : new JsonObject { ["rule"] = rule.Key, ["value"] = rule.Value.DeepClone() },
-            $"Fake {rule.Key}")),
+            $"Fake {rule.Key}",
+            SharedRules.Contains(rule.Key) ? "scope fake" : null)),
         ];
+
+    /// <summary>Rules whose object the fake's repos share, as Azure DevOps environments are shared by a project.</summary>
+    public HashSet<string> SharedRules { get; } = [];
 
     public Task<ApplyResult> ApplyAsync(RepoRef repo, RepoChangeSet changes, CancellationToken cancellationToken)
     {
@@ -108,6 +112,8 @@ internal sealed class FakeProviderAdapter(Platform platform = Platform.GitHub, I
         public List<string> Unknown { get; } = [];
 
         public List<RuleWarning> Warnings { get; } = [];
+
+        public List<RuleWarning> Unavailable { get; } = [];
 
         public PolicyMappingException? MappingFailure { get; set; }
 

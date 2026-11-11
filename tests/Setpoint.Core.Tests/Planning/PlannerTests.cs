@@ -261,6 +261,126 @@ public sealed class PlannerTests
     }
 
     /// <summary>
+    /// Given an unmanaged grant of admin to platform, as a project-level permission, and a policy giving platform write,
+    /// when the repo is planned,
+    /// then SP2101 says that access still applies, because Setpoint doesn't take it away.
+    /// </summary>
+    [Fact(DisplayName = "👎 An unmanaged grant above the policy's role raises SP2101")]
+    public async Task Plan_UnmanagedAccessGrant_WarnsSP2101()
+    {
+        // Arrange
+        _builder.WithBaseline(Baseline("access: { platform: write }"));
+        _adapter.AddRepo(Repo).WithLive("access", """{ "platform": "write" }""")
+            .Unmanaged.Add(new UnmanagedSetting("access", "permissions inherited from project Payments", System.Text.Json.Nodes.JsonNode.Parse("""{ "platform": "admin" }""")));
+
+        // Act
+        PlanResult result = await PlanAsync();
+
+        // Assert
+        Diagnostic warning = result.Diagnostics.ShouldHaveSingleItem();
+        warning.Code.ShouldBe(DiagnosticCodes.UnmanagedStricter);
+        warning.Message.ShouldContain("that access still applies");
+    }
+
+    /// <summary>
+    /// Given an unmanaged grant of read to platform, and a policy giving platform write,
+    /// when the repo is planned,
+    /// then nothing is raised, because the policy's role already covers it.
+    /// </summary>
+    [Fact(DisplayName = "👍 An unmanaged grant below the policy's role raises nothing")]
+    public async Task Plan_UnmanagedAccessGrantBelow_RaisesNothing()
+    {
+        // Arrange
+        _builder.WithBaseline(Baseline("access: { platform: write }"));
+        _adapter.AddRepo(Repo).WithLive("access", """{ "platform": "write" }""")
+            .Unmanaged.Add(new UnmanagedSetting("access", "permissions inherited from project Payments", System.Text.Json.Nodes.JsonNode.Parse("""{ "platform": "read" }""")));
+
+        // Act
+        PlanResult result = await PlanAsync();
+
+        // Assert
+        result.Diagnostics.ShouldBeEmpty();
+    }
+
+    /// <summary>
+    /// Given a rule the repo's platform plan doesn't offer, with a live value that differs from the policy,
+    /// when the repo is planned,
+    /// then the rule is left alone with its SP3002 warning, and the rest of the repo is still planned.
+    /// </summary>
+    [Fact(DisplayName = "👎 A rule the repo can't have is skipped with its warning")]
+    public async Task Plan_UnavailableRule_IsSkippedWithWarning()
+    {
+        // Arrange
+        _builder.WithBaseline(Baseline("minimumReviewers: { count: 2 }\n  requireCommentResolution: true"));
+        _adapter.AddRepo(Repo).WithLive("minimumReviewers", """{ "count": 1, "resetOnPush": false }""")
+            .Unavailable.Add(new RuleWarning("requireCommentResolution", Diagnostic.Warning(DiagnosticCodes.RuleUnavailable, "requireCommentResolution: not on this plan.")));
+
+        // Act
+        PlanResult result = await PlanAsync();
+
+        // Assert
+        result.Diagnostics.ShouldHaveSingleItem().Code.ShouldBe(DiagnosticCodes.RuleUnavailable);
+        Single(result).Changes.Select(c => c.Rule).ShouldBe(["minimumReviewers.count"]);
+    }
+
+    /// <summary>
+    /// Given two repos that share the object a rule maps to, and declare it the same way,
+    /// when they are planned,
+    /// then the object is written once, by the first repo by path, and the other is in sync.
+    /// </summary>
+    [Fact(DisplayName = "👍 A shared object the repos agree on is planned once")]
+    public async Task Plan_SharedObjectAgreed_PlannedOnce()
+    {
+        // Arrange
+        _builder.WithBaseline(Baseline("requireCommentResolution: true"));
+        _adapter.SharedRules.Add("requireCommentResolution");
+        _adapter.AddRepo(new RepoRef(_builder.TargetName, _builder.Owner, "web"));
+        _adapter.AddRepo(Repo);
+
+        // Act
+        PlanResult result = await PlanAsync();
+
+        // Assert
+        result.Document.Repos.Select(r => $"{r.Path} {r.Status} {r.Objects.Count} {r.Changes.Count}").ShouldBe(
+            [$"{_builder.Owner}/web InSync 0 0", $"{_builder.Owner}/api Changes 1 1"],
+            ignoreOrder: true);
+    }
+
+    /// <summary>
+    /// Given two repos that share the object a rule maps to, and a repo override that declares it differently,
+    /// when they are planned,
+    /// then both repos fail with SP0122, each naming the other, and nothing is planned for either.
+    /// </summary>
+    [Fact(DisplayName = "👎 A shared object declared differently is SP0122 on each repo")]
+    public async Task Plan_SharedObjectConflict_FailsBoth()
+    {
+        // Arrange
+        string target = _builder.TargetName;
+        string owner = _builder.Owner;
+        _builder.WithBaseline(Baseline("requireCommentResolution: true"))
+            .WithRepoOverride($"{target}/{owner}/web", $"""
+                version: 1
+                layer: repo
+                repo: {target}/{owner}/web
+                rules:
+                  requireCommentResolution: false
+                """);
+        _adapter.SharedRules.Add("requireCommentResolution");
+        _adapter.AddRepo(new RepoRef(target, owner, "web")).WithLive("requireCommentResolution", "true");
+        _adapter.AddRepo(Repo);
+
+        // Act
+        PlanResult result = await PlanAsync();
+
+        // Assert
+        result.Document.Repos.ShouldAllBe(r => r.Status == PlanRepoStatus.Error && r.Objects.Count == 0);
+        Diagnostic[] errors = [.. result.Diagnostics.Where(d => d.Code == DiagnosticCodes.SharedObjectConflict)];
+        errors.Length.ShouldBe(2);
+        errors.ShouldContain(d => d.Message.Contains($"and {owner}/web declare it differently", StringComparison.Ordinal));
+        errors.ShouldContain(d => d.Message.Contains($"and {owner}/api declare it differently", StringComparison.Ordinal));
+    }
+
+    /// <summary>
     /// Given a rule that two live objects match,
     /// when the repo is planned,
     /// then SP2201 warns and nothing is created or changed for that rule.

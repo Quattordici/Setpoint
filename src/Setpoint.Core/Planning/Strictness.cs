@@ -25,9 +25,41 @@ public static class Strictness
             "requiredChecks" => Names(unmanaged).Except(Names(declared), StringComparer.OrdinalIgnoreCase).Any(),
             "requireCommentResolution" or "protectFromForcePushAndDelete" => IsTrue(unmanaged) && !IsTrue(declared),
             "allowedMergeTypes" => declared is not null && Names(declared).Except(Names(unmanaged), StringComparer.Ordinal).Any(),
+            "access" => GrantsMore(unmanaged, declared),
             _ => false,
         };
     }
+
+    // An unmanaged grant, such as an inherited permission, that gives a principal more than the policy's role.
+    private static bool GrantsMore(JsonNode unmanaged, JsonNode? declared)
+    {
+        if (unmanaged is not JsonObject grants || declared is not JsonObject roles)
+        {
+            return false;
+        }
+
+        foreach ((string principal, JsonNode? role) in grants)
+        {
+            JsonNode? wanted = roles.FirstOrDefault(r => string.Equals(r.Key, principal, StringComparison.OrdinalIgnoreCase)).Value;
+            if (wanted is not null && Rank(role) > Rank(wanted))
+            {
+                return true;
+            }
+        }
+
+        return false;
+    }
+
+    private static int Rank(JsonNode? role) => (role as JsonValue)?.TryGetValue(out string? name) == true
+        ? name switch
+        {
+            "none" => 0,
+            "read" => 1,
+            "write" => 2,
+            "admin" => 3,
+            _ => 2,
+        }
+        : 0;
 
     private static int Count(JsonNode? node) => node?["count"] is JsonValue v && v.TryGetValue(out int count) ? count : 0;
 

@@ -77,13 +77,13 @@ public sealed class Planner
             CheckSelectors(name, run.Listed, merger, runDiagnostics);
             targets.Add(new PlanTarget(name, definition.Platform, run.Info.Detected, run.Info.ApiVersion, definition.Auth ?? AuthMethod.Pat, run.Info.Identity, run.Listed.Count));
 
-            var planned = new (PlanRepo Repo, List<Diagnostic> Diagnostics)[run.Listed.Count];
+            var planned = new SharedObjects.Planned[run.Listed.Count];
             await Parallel.ForEachAsync(
                 Enumerable.Range(0, run.Listed.Count),
                 new ParallelOptions { MaxDegreeOfParallelism = RepoConcurrency, CancellationToken = cancellationToken },
                 async (index, ct) => planned[index] = await PlanRepoAsync(run.Adapter, run.Listed[index], merger, options, ct));
 
-            foreach ((PlanRepo repo, List<Diagnostic> diagnostics) in planned)
+            foreach ((PlanRepo repo, List<Diagnostic> diagnostics, _) in SharedObjects.Reconcile(planned))
             {
                 repos.Add(repo);
                 repoDiagnostics.AddRange(diagnostics);
@@ -174,7 +174,7 @@ public sealed class Planner
         }
     }
 
-    private static async Task<(PlanRepo, List<Diagnostic>)> PlanRepoAsync(
+    private static async Task<SharedObjects.Planned> PlanRepoAsync(
         IProviderAdapter adapter,
         ListedRepo listed,
         PolicyMerger merger,
@@ -197,10 +197,10 @@ public sealed class Planner
             Diagnostics = [.. diagnostics.Select(PlanDiagnostic.From)],
         };
 
-        (PlanRepo, List<Diagnostic>) Finish(PlanRepoStatus status, RepoDiff? diff, IEnumerable<Diagnostic> found)
+        SharedObjects.Planned Finish(PlanRepoStatus status, RepoDiff? diff, IEnumerable<Diagnostic> found, IReadOnlyList<DesiredObject>? shared = null)
         {
             List<Diagnostic> diagnostics = [.. DiagnosticList.ApplyStrict(mergeDiagnostics.Concat(found).Select(d => Prefix(repo, d)), options.Strict)];
-            return (Entry(status, diff, diagnostics), diagnostics);
+            return new SharedObjects.Planned(Entry(status, diff, diagnostics), diagnostics, shared ?? []);
         }
 
         if (listed.Skipped is { } skipped)
@@ -216,10 +216,12 @@ public sealed class Planner
                 return Finish(PlanRepoStatus.Skipped, null, [unsupported]);
             }
 
-            LiveSnapshot live = await adapter.ReadAsync(repo, cancellationToken);
+            LiveSnapshot read = await adapter.ReadAsync(repo, cancellationToken);
             DesiredState desired = DesiredStateBuilder.Build(effective, adapter);
-            RepoDiff diff = RepoDiffer.Diff(desired, live, adapter.MapObjects(desired, live));
-            return Finish(diff.Objects.Count > 0 ? PlanRepoStatus.Changes : PlanRepoStatus.InSync, diff, diff.Diagnostics);
+            LiveSnapshot live = await adapter.PrepareAsync(desired, read, cancellationToken);
+            IReadOnlyList<DesiredObject> objects = adapter.MapObjects(desired, live);
+            RepoDiff diff = RepoDiffer.Diff(desired, live, objects);
+            return Finish(diff.Objects.Count > 0 ? PlanRepoStatus.Changes : PlanRepoStatus.InSync, diff, diff.Diagnostics, [.. objects.Where(o => o.SharedBy is not null)]);
         }
         catch (PolicyMappingException ex)
         {

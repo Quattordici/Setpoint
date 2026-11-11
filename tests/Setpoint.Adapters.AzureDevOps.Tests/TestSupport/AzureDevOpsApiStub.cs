@@ -125,6 +125,14 @@ internal sealed class AzureDevOpsApiStub(WireMockServer server, string token)
         return this;
     }
 
+    /// <summary>The identities a general search for <paramref name="filterValue"/> returns.</summary>
+    public AzureDevOpsApiStub IdentitySearch(string filterValue, params (string Descriptor, string Name)[] identities)
+    {
+        server.Given(Versioned("/_apis/identities").WithParam("searchFilter", "General").WithParam("filterValue", filterValue))
+            .RespondWith(Json(List(new JsonArray([.. identities.Select(i => (JsonNode)Identity(i.Descriptor, i.Name))]))));
+        return this;
+    }
+
     /// <summary>The identities a descriptor lookup returns.</summary>
     public AzureDevOpsApiStub Identities(params (string Descriptor, string Name)[] identities)
     {
@@ -177,6 +185,73 @@ internal sealed class AzureDevOpsApiStub(WireMockServer server, string token)
         return this;
     }
 
+    /// <summary>The identities a general search for <paramref name="filterValue"/> returns, each with a known identity id.</summary>
+    public AzureDevOpsApiStub IdentitySearchWithIds(string filterValue, params (string Descriptor, string Name, string Id)[] identities)
+    {
+        server.Given(Versioned("/_apis/identities").WithParam("searchFilter", "General").WithParam("filterValue", filterValue))
+            .RespondWith(Json(List(new JsonArray([.. identities.Select(i =>
+            {
+                JsonObject identity = Identity(i.Descriptor, i.Name);
+                identity["id"] = i.Id;
+                return (JsonNode)identity;
+            })]))));
+        return this;
+    }
+
+    /// <summary>A project's deployment environments, listed at the pinned preview version.</summary>
+    public AzureDevOpsApiStub Environments(string projectId, params (long Id, string Name)[] environments)
+    {
+        server.Given(Preview($"/{projectId}/_apis/distributedtask/environments").UsingGet())
+            .RespondWith(Json(List(new JsonArray([.. environments.Select(e => (JsonNode)new JsonObject { ["id"] = e.Id, ["name"] = e.Name, ["description"] = string.Empty })]))));
+        return this;
+    }
+
+    /// <summary>The checks on one environment.</summary>
+    public AzureDevOpsApiStub EnvironmentChecks(string projectId, long environmentId, params JsonObject[] checks)
+    {
+        server.Given(Preview($"/{projectId}/_apis/pipelines/checks/configurations").UsingGet()
+                .WithParam("resourceType", "environment").WithParam("resourceId", environmentId.ToString(System.Globalization.CultureInfo.InvariantCulture)))
+            .RespondWith(Json(List(new JsonArray([.. checks.Select(c => (JsonNode)c.DeepClone())]))));
+        return this;
+    }
+
+    /// <summary>Answers creating an environment (POST) and adding, replacing or removing a check.</summary>
+    public AzureDevOpsApiStub EnvironmentWrites(string projectId, int status = 200, string? body = null, long createdId = 99)
+    {
+        server.Given(Preview($"/{projectId}/_apis/distributedtask/environments").UsingPost())
+            .RespondWith(Write(status, body ?? $$"""{"id":{{createdId}},"name":"created"}"""));
+        server.Given(Preview($"/{projectId}/_apis/pipelines/checks/configurations").UsingPost())
+            .RespondWith(Write(status, body ?? """{"id":501,"version":1}"""));
+        foreach (string method in new[] { "PATCH", "DELETE" })
+        {
+            server.Given(Preview($"/{projectId}/_apis/pipelines/checks/configurations/*").UsingMethod(method))
+                .RespondWith(Write(status, body ?? (method == "DELETE" ? null : """{"id":501,"version":2}""")));
+        }
+
+        return this;
+    }
+
+    /// <summary>An Approval check with these approver identity ids, all of whom must approve.</summary>
+    public static JsonObject ApprovalCheck(int id, long environmentId, params (string Id, string Name)[] approvers) => new()
+    {
+        ["id"] = id,
+        ["version"] = 3,
+        ["type"] = new JsonObject { ["id"] = "8C6F20A7-A545-4486-9777-F762FAFE0D4D", ["name"] = "Approval" },
+        ["settings"] = new JsonObject
+        {
+            ["approvers"] = new JsonArray([.. approvers.Select(a => (JsonNode)new JsonObject { ["id"] = a.Id, ["displayName"] = a.Name })]),
+            ["executionOrder"] = "anyOrder",
+            ["minRequiredApprovers"] = 0,
+            ["instructions"] = "Check the release notes.",
+            ["blockedApprovers"] = new JsonArray(),
+            ["requesterCannotBeApprover"] = false,
+        },
+        ["timeout"] = 1440,
+        ["resource"] = new JsonObject { ["type"] = "environment", ["id"] = environmentId.ToString(System.Globalization.CultureInfo.InvariantCulture) },
+        ["createdBy"] = new JsonObject { ["displayName"] = "Mattias" },
+        ["modifiedOn"] = "2026-11-10T03:04:05Z",
+    };
+
     /// <summary>A server that is fully reachable: signed in, released at <paramref name="releasedVersion"/>, one project with every policy type.</summary>
     public AzureDevOpsApiStub Server(string releasedVersion = "7.0")
     {
@@ -197,6 +272,8 @@ internal sealed class AzureDevOpsApiStub(WireMockServer server, string token)
         : Request.Create().WithPath(Collection + path).WithHeader("Authorization", _basic);
 
     private IRequestBuilder Versioned(string path) => Signed(path).UsingGet().WithParam("api-version", ApiVersion);
+
+    private IRequestBuilder Preview(string path) => Signed(path).WithParam("api-version", "7.0-preview.1");
 
     private static JsonObject Location(string resource, string released) => new()
     {
