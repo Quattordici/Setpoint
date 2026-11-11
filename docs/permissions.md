@@ -50,7 +50,8 @@ The Actions job token has no Administration permission, so it can't run `apply`.
 | `plan` | **Code (read)** `vso.code` + **Build (read)** `vso.build` | Lists repos, reads policies and policy types, and resolves `requiredChecks` names to pipelines. |
 | `plan`, to see force-push protection | + **Identity (read)** `vso.identity` + **Security (manage)** `vso.security_manage` | Reads the default branch's security entries. There is no read-only security scope, so a read-only plan reports `protectFromForcePushAndDelete` as unknown (`SP2202`) instead. |
 | `plan`, for `access` | + **Identity (read)** `vso.identity` + **Security (manage)** `vso.security_manage` | Resolves the named groups and users (`SP0207`), and reads the repo's and project's security entries. Without them `access` is reported as unknown (`SP2202`). |
-| `apply` | **Code (read & write)** `vso.code_write` + **Build (read)** + **Identity (read)** + **Security (manage)** | Writes policy configurations, the Force push deny and access entries. |
+| `plan`, for `environments` | + **Environment (read & manage)** `vso.environment_manage` | Reads the project's environments and their checks; there is no read-only environment scope (unconfirmed). Without it, `environments` is reported as unknown (`SP2202`). |
+| `apply` | **Code (read & write)** `vso.code_write` + **Build (read)** + **Identity (read)** + **Security (manage)**, + **Environment (read & manage)** for `environments` | Writes policy configurations, the Force push deny, access entries, and environments with their Approval checks. |
 
 `vso.code_manage` isn't needed. On Azure DevOps Server 2022 before Update 1, some REST APIs had no granular scope and may need a **Full access** PAT; whether the security APIs Setpoint calls are among them is unconfirmed.
 
@@ -59,7 +60,7 @@ The Actions job token has no Administration permission, so it can't run `apply`.
 | Command | Permission | Where |
 |---|---|---|
 | `plan` | **Read** on the repos, and **View builds** on the pipelines `requiredChecks` names | Granted to Readers and Contributors by default. |
-| `apply` | + **Edit policies** and **Manage permissions** | Project Settings → Repositories → Security, on the top-level *Git repositories* node so every repo inherits it, or per repo. Project Administrators have both by default. Manage permissions covers both the Force push deny and `access`. |
+| `apply` | + **Edit policies** and **Manage permissions** | Project Settings → Repositories → Security, on the top-level *Git repositories* node so every repo inherits it, or per repo. Project Administrators have both by default. Manage permissions covers both the Force push deny and `access`. For `environments`, the identity also needs the **Creator** role on the project's environments (Pipelines → Environments → Security) to create one, and **Administrator** on each environment to change its checks. |
 
 Policies marked `isEnterpriseManaged` also need *Manage Enterprise Policies*. Setpoint reports them as unmanaged and doesn't write them.
 

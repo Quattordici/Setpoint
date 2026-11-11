@@ -29,4 +29,9 @@ public sealed record DesiredRule(string Key, JsonNode? Value, LayerRef Layer, bo
 /// <param name="Rules">The rule values it would carry; a null value means the rule is removed from it.</param>
 /// <param name="Payload">The full payload apply sends, or null when the object must not exist.</param>
 /// <param name="Title">What the object is, for people, when it has to be created: <c>Build validation (new)</c>.</param>
-public sealed record DesiredObject(string MatchKey, string CreateKey, IReadOnlyDictionary<string, JsonNode?> Rules, JsonNode? Payload, string? Title = null);
+/// <param name="SharedBy">
+/// Set when the object isn't the repo's own but shared by several repos, such as an Azure DevOps environment, which
+/// belongs to the project: the scope it is shared in, such as <c>project Payments</c>. Repos in one scope must
+/// declare it the same way (SP0122), and the plan writes it once.
+/// </param>
+public sealed record DesiredObject(string MatchKey, string CreateKey, IReadOnlyDictionary<string, JsonNode?> Rules, JsonNode? Payload, string? Title = null, string? SharedBy = null);

@@ -33,6 +33,18 @@ internal static class ObjectMapper
             objects.AddRange(RepoAccessAcl.Map(access, context.Principals, live, context.RepoToken));
         }
 
+        if (rules.GetValueOrDefault(EnvironmentApproval.Environments)?.Value is JsonObject { Count: > 0 } environments
+            && !live.UnknownRules.Contains(EnvironmentApproval.Environments))
+        {
+            objects.AddRange(EnvironmentApproval.Map(
+                environments,
+                context.Reviewers,
+                live,
+                (context.Repo.Project.Id, context.Repo.Project.Name),
+                context.AmbiguousEnvironments.Keys.ToHashSet(StringComparer.Ordinal),
+                context.ApproverName));
+        }
+
         return objects;
     }
 

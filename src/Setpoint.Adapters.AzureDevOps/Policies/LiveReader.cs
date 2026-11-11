@@ -17,6 +17,16 @@ internal sealed record RepoContext(AdoRepository Repo, IReadOnlyList<AdoBuildDef
     /// <summary>The identities the access rule's names resolved to, by the name as the policy writes it.</summary>
     public IReadOnlyDictionary<string, Principal> Principals { get; init; } = new Dictionary<string, Principal>();
 
+    /// <summary>The identities the environments rule's reviewers resolved to, by the name as the policy writes it.</summary>
+    public IReadOnlyDictionary<string, Principal> Reviewers { get; init; } = new Dictionary<string, Principal>();
+
+    /// <summary>Environments with several Approval checks, by lower-case name, with their warning; they are left alone.</summary>
+    public IReadOnlyDictionary<string, RuleWarning> AmbiguousEnvironments { get; init; } = new Dictionary<string, RuleWarning>();
+
+    /// <summary>The name an approver is known by: the reviewer name it resolved from, or its display name.</summary>
+    public string ApproverName(string id, string? displayName) =>
+        Reviewers.Values.FirstOrDefault(p => string.Equals(p.Id, id, StringComparison.OrdinalIgnoreCase))?.Name ?? displayName ?? id;
+
     /// <summary>The repo's token in the Git Repositories security namespace.</summary>
     public string RepoToken => RepoAccessAcl.RepoToken(Repo.Project.Id, Repo.Id);
 

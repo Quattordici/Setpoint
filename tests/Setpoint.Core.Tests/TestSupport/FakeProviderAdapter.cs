@@ -81,8 +81,12 @@ internal sealed class FakeProviderAdapter(Platform platform = Platform.GitHub, I
             $"fake:new/{rule.Key}",
             new Dictionary<string, JsonNode?> { [rule.Key] = rule.Value?.DeepClone() },
             rule.Value is null ? null : new JsonObject { ["rule"] = rule.Key, ["value"] = rule.Value.DeepClone() },
-            $"Fake {rule.Key}")),
+            $"Fake {rule.Key}",
+            SharedRules.Contains(rule.Key) ? "scope fake" : null)),
         ];
+
+    /// <summary>Rules whose object the fake's repos share, as Azure DevOps environments are shared by a project.</summary>
+    public HashSet<string> SharedRules { get; } = [];
 
     public Task<ApplyResult> ApplyAsync(RepoRef repo, RepoChangeSet changes, CancellationToken cancellationToken)
     {

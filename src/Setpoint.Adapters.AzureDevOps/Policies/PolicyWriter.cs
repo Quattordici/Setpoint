@@ -20,6 +20,9 @@ internal static class PolicyWriter
     private const string PolicyPermission =
         "The token needs Code (read & write) (vso.code_write), and its account the Edit policies permission on the repo.";
 
+    private const string EnvironmentPermission =
+        "The token needs Environment (read & manage) (vso.environment_manage), and its account the Administrator role on the environment, or the Creator role on the project's environments to create one.";
+
     private const string AclPermission =
         "The token needs Security (manage) (vso.security_manage), and its account the Manage permissions permission on the repo.";
 
@@ -50,6 +53,11 @@ internal static class PolicyWriter
 
     private static async Task<string?> WriteAsync(AzureDevOpsApiClient api, RepoContext context, PlanObject planned, CancellationToken cancellationToken)
     {
+        if (EnvironmentApproval.IsMatchKey(planned.MatchKey))
+        {
+            return await WriteEnvironmentAsync(api, context, planned, cancellationToken).ConfigureAwait(false);
+        }
+
         bool isAccess = RepoAccessAcl.IsMatchKey(planned.MatchKey);
         bool isAcl = isAccess || planned.MatchKey == ForcePushAcl.MatchKey(context.RefName);
         if ((isAccess ? AccessRefusal(context, planned) : Refusal(context, planned, isAcl)) is { } refusal)
@@ -85,6 +93,105 @@ internal static class PolicyWriter
         {
             return await ErrorAsync(response, planned, isAcl, cancellationToken).ConfigureAwait(false);
         }
+    }
+
+    // An environment: created if missing, then its Approval check created, replaced or removed. The environment is
+    // looked up by name at apply, because a new one has no id at plan time, and a check id from the plan must be an
+    // Approval check on that environment.
+    private static async Task<string?> WriteEnvironmentAsync(AzureDevOpsApiClient api, RepoContext context, PlanObject planned, CancellationToken cancellationToken)
+    {
+        string projectId = context.Repo.Project.Id;
+        string? name = planned.Payload?["environment"] is JsonValue n && n.TryGetValue(out string? text) ? text : null;
+        JsonObject? check = planned.Payload?["check"] as JsonObject;
+        int? checkId = WholeNumber(planned.Payload?["checkId"]);
+        if (name is null || planned.Operation == ObjectOperation.Delete || EnvironmentApproval.MatchKey(projectId, name) != planned.MatchKey
+            || (check is not null && !EnvironmentApproval.IsApproval(check)))
+        {
+            return $"{planned.Key} isn't an environment of {context.Repo.Project.Name} with its Approval check; environments are never deleted. Nothing was written.";
+        }
+
+        try
+        {
+            List<JsonObject>? environments = await api.ListEnvironmentsAsync(projectId, cancellationToken).ConfigureAwait(false);
+            if (environments is null)
+            {
+                return $"Azure DevOps refused to list {context.Repo.Project.Name}'s environments. {EnvironmentPermission}";
+            }
+
+            JsonObject? environment = environments.FirstOrDefault(e => string.Equals(PolicyMapper.Text(e["name"]), name, StringComparison.OrdinalIgnoreCase));
+            if (environment is null)
+            {
+                using HttpResponseMessage created = await api.CreateEnvironmentAsync(projectId, name, cancellationToken).ConfigureAwait(false);
+                if (await EnvironmentErrorAsync(created, $"creating environment {name}", cancellationToken).ConfigureAwait(false) is { } failed)
+                {
+                    return failed;
+                }
+
+                environment = JsonNode.Parse(await created.Content.ReadAsStringAsync(cancellationToken).ConfigureAwait(false)) as JsonObject;
+            }
+
+            long environmentId = environment?["id"] is JsonValue e && e.TryGetValue(out long found) ? found : 0;
+            if (checkId is { } existing)
+            {
+                List<JsonObject>? checks = await api.ListEnvironmentChecksAsync(projectId, environmentId, cancellationToken).ConfigureAwait(false);
+                if (checks?.Any(k => PolicyMapper.Number(k["id"]) == existing && EnvironmentApproval.IsApproval(k)) is not true)
+                {
+                    return $"Check #{existing} is no Approval check on environment {name}, or the token can't see it. Plan again.";
+                }
+            }
+
+            if (check is null && checkId is null)
+            {
+                return null;
+            }
+
+            JsonObject? body = check?.DeepClone() as JsonObject;
+            if (body?["resource"] is JsonObject resource)
+            {
+                resource["id"] = environmentId.ToString(CultureInfo.InvariantCulture);
+            }
+
+            using HttpResponseMessage response = (body, checkId) switch
+            {
+                (null, int remove) => await api.DeleteCheckAsync(projectId, remove, cancellationToken).ConfigureAwait(false),
+                (JsonObject add, null) => await api.CreateCheckAsync(projectId, add, cancellationToken).ConfigureAwait(false),
+                (JsonObject replace, int update) => await api.UpdateCheckAsync(projectId, update, replace, cancellationToken).ConfigureAwait(false),
+                _ => throw new InvalidOperationException("unreachable"),
+            };
+            return await EnvironmentErrorAsync(response, $"writing the Approval check on environment {name}", cancellationToken).ConfigureAwait(false);
+        }
+        catch (Exception ex) when (ex is not OperationCanceledException || !cancellationToken.IsCancellationRequested)
+        {
+            return ex.Message;
+        }
+    }
+
+    // A number read from a plan file, or built in this run, whichever type it holds.
+    private static int? WholeNumber(JsonNode? node) => node is JsonValue value
+        ? value.TryGetValue(out long big) ? (int)big : value.TryGetValue(out int small) ? small : null
+        : null;
+
+    private static async Task<string?> EnvironmentErrorAsync(HttpResponseMessage response, string what, CancellationToken cancellationToken)
+    {
+        if (response.IsSuccessStatusCode && response.StatusCode != HttpStatusCode.NonAuthoritativeInformation)
+        {
+            return null;
+        }
+
+        if (response.StatusCode == HttpStatusCode.NonAuthoritativeInformation)
+        {
+            return $"Azure DevOps answered {what} with its sign-in page, so it didn't accept the token. {EnvironmentPermission}";
+        }
+
+        string body = await response.Content.ReadAsStringAsync(cancellationToken).ConfigureAwait(false);
+        string message = Message(body) ?? response.ReasonPhrase ?? "no message";
+        return (int)response.StatusCode switch
+        {
+            401 or 403 => $"Azure DevOps refused {what} ({(int)response.StatusCode}: {message}). {EnvironmentPermission}",
+            404 => $"Azure DevOps couldn't find what {what} needs (404: {message}). Plan again.",
+            400 or 409 => $"Azure DevOps rejected {what} ({(int)response.StatusCode}: {message}).",
+            int status => $"{char.ToUpperInvariant(what[0])}{what[1..]} failed ({status}: {message}).",
+        };
     }
 
     // An access entry must be on this repo's token, for the identity its match key names, and touch only role bits.

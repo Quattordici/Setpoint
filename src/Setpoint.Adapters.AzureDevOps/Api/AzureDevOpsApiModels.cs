@@ -38,7 +38,7 @@ internal sealed record AdoRepository
 internal sealed record AdoBuildDefinition(int Id, string Name, string? Path);
 
 /// <summary>An identity, from <c>GET _apis/identities</c>. The descriptor is the one ACLs are keyed on.</summary>
-internal sealed record AdoIdentity(string? Descriptor, string? ProviderDisplayName, string? CustomDisplayName);
+internal sealed record AdoIdentity(string? Descriptor, string? ProviderDisplayName, string? CustomDisplayName, string? Id = null);
 
 /// <summary>The Azure DevOps REST API's JSON contract: camelCase, and every field Setpoint doesn't read is ignored.</summary>
 [JsonSourceGenerationOptions(PropertyNamingPolicy = JsonKnownNamingPolicy.CamelCase)]
