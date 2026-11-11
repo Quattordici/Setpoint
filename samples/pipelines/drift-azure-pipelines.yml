@@ -18,7 +18,7 @@ pool:
 
 variables:
   # Pin the same version as the plan/apply pipeline, so a drift report can be applied there.
-  setpointVersion: 0.1.0-alpha
+  setpointVersion: 1.0.0
   setpoint: $(Agent.ToolsDirectory)/setpoint/setpoint
 
 jobs:

@@ -18,7 +18,7 @@ Both assume the targets are named `github` and `ado`, as in [the sample policy r
 
 ## How both pipelines work
 
-- **The Setpoint version is pinned** (`0.1.0-alpha`) and installed the same way in both stages. `apply` refuses a plan made by another version, so a floating version could break an apply that was approved between releases.
+- **The Setpoint version is pinned** (`1.0.0`) and installed the same way in both stages. `apply` refuses a plan made by another version, so a floating version could break an apply that was approved between releases.
 - **`validate --strict`** runs first, so a policy mistake fails fast with a file and line, before any token is used.
 - **`plan --exit-code`** exits 5 when there are changes. The step turns that into an output, `hasChanges`, so the apply stage is skipped, and nobody is asked to approve, when everything is in sync. Any other non-zero code fails the stage: 1 for a runtime failure such as an unreachable target, 2 for an invalid policy. See [diagnostics.md](diagnostics.md#exit-codes).
 - **The apply stage checks out the same commit.** `apply` hashes the policy files and refuses the plan if they changed, so it needs them exactly as the plan saw them. Both platforms check out the triggering commit in every stage, which is what you want.

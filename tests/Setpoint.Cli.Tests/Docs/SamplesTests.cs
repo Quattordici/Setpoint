@@ -9,7 +9,7 @@ namespace Setpoint.Cli.Tests.Docs;
 
 /// <summary>
 /// Keeps the getting-started guide and the samples it points at honest: the sample policy repo validates, the
-/// pinned Setpoint version is the one being built, the sample pipelines set every token the sample targets read,
+/// pinned Setpoint version is the release being built, the sample pipelines set every token the sample targets read,
 /// and the drift pipelines run on a schedule with read-only secrets only.
 /// </summary>
 public sealed partial class SamplesTests
@@ -40,9 +40,11 @@ public sealed partial class SamplesTests
     /// <summary>
     /// Given the guide and both sample pipelines,
     /// when the Setpoint version they pin is read,
-    /// then it is the version being built, because apply refuses a plan made by another version.
+    /// then it is one release: the one being built when it is a release, and otherwise no later than the one the
+    /// build leads to. Apply refuses a plan made by another version, so a pipeline must pin a released version, and a
+    /// tag can only be released once the docs pin it.
     /// </summary>
-    [Theory(DisplayName = "👍 Docs and samples pin the version being built")]
+    [Theory(DisplayName = "👍 Docs and samples pin the release being built")]
     [InlineData("docs/getting-started.md")]
     [InlineData("samples/pipelines/azure-pipelines.yml")]
     [InlineData("samples/pipelines/github-actions.yml")]
@@ -53,12 +55,24 @@ public sealed partial class SamplesTests
         // Arrange
         string text = File.ReadAllText(Path.Combine(s_root, file));
         string current = SetpointVersion.Current.Split('+')[0];
+        string[] parts = current.Split('-', 2);
+        var core = Version.Parse(parts[0]);
+        bool isRelease = parts.Length == 1;
 
         // Act
         string[] pinned = [.. PinnedVersion().Matches(text).Select(m => m.Groups["version"].Value).Distinct()];
 
         // Assert
-        pinned.ShouldBe([current], $"{file} pins another Setpoint version. Update it to {current}.");
+        string version = pinned.ShouldHaveSingleItem($"{file} pins more than one Setpoint version.");
+        Version.TryParse(version, out Version? release).ShouldBeTrue($"{file} pins {version}, which is not a release.");
+        if (isRelease)
+        {
+            release.ShouldBe(core, $"{file} pins {version}, but this build is release {current}. Update it to {current}.");
+        }
+        else
+        {
+            release.ShouldBeLessThanOrEqualTo(core, $"{file} pins {version}, which is later than the {core} this build leads to.");
+        }
     }
 
     /// <summary>
