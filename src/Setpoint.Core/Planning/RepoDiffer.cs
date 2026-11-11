@@ -36,7 +36,15 @@ public static class RepoDiffer
                 $"{ambiguous.Rule}: {ambiguous.ObjectKeys.Count} live objects match {ambiguous.Detail} ({string.Join(", ", ambiguous.ObjectKeys)}); left alone."));
         }
 
-        foreach (string unknown in live.UnknownRules.Where(desired.Rules.ContainsKey))
+        foreach (RuleWarning unavailable in live.Unavailable ?? [])
+        {
+            if (desired.Rules.TryGetValue(unavailable.Rule, out DesiredRule? declared) && leftAlone.Add(unavailable.Rule) && !declared.MustBeAbsent)
+            {
+                diagnostics.Add(unavailable.Diagnostic);
+            }
+        }
+
+        foreach (string unknown in live.UnknownRules.Where(r => desired.Rules.ContainsKey(r) && !leftAlone.Contains(r)))
         {
             leftAlone.Add(unknown);
             diagnostics.Add(Diagnostic.Warning(

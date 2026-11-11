@@ -172,6 +172,44 @@ public sealed class PolicyValidatorTests
     }
 
     /// <summary>
+    /// Given an environment that waits longer than 30 days, and a disabled one with the same wait,
+    /// when they are validated,
+    /// then only the enabled one reports SP0121.
+    /// </summary>
+    [Fact(DisplayName = "👎 A wait over 30 days is SP0121")]
+    public void Validate_WaitTooLong_ReportsInvalidEnvironment()
+    {
+        // Arrange
+        _builder.WithBaseline("version: 1\nlayer: baseline\nrules:\n  environments:\n    production: { waitMinutes: 50000 }\n    old: { enabled: false, waitMinutes: 50000 }");
+
+        // Act
+        Diagnostic diagnostic = Validate().ShouldHaveSingleItem();
+
+        // Assert
+        diagnostic.Code.ShouldBe(DiagnosticCodes.InvalidEnvironment);
+        diagnostic.Message.ShouldContain("'production' waits 50000 minutes");
+    }
+
+    /// <summary>
+    /// Given seven environment reviewers in a layer that reaches a GitHub target,
+    /// when it is validated,
+    /// then SP0121 says GitHub allows six.
+    /// </summary>
+    [Fact(DisplayName = "👎 Seven environment reviewers is SP0121 where GitHub is reached")]
+    public void Validate_SevenEnvironmentReviewers_ReportsInvalidEnvironment()
+    {
+        // Arrange
+        _builder.WithBaseline("version: 1\nlayer: baseline\nrules:\n  environments:\n    production: { reviewers: [a, b, c, d, e, f, g] }");
+
+        // Act
+        Diagnostic diagnostic = Validate().ShouldHaveSingleItem();
+
+        // Assert
+        diagnostic.Code.ShouldBe(DiagnosticCodes.InvalidEnvironment);
+        diagnostic.Message.ShouldContain("at most 6");
+    }
+
+    /// <summary>
     /// Given more than 10 reviewers in a layer that reaches a GitHub target, and the same in a group that only reaches Azure DevOps,
     /// when they are validated,
     /// then only the GitHub-reaching layer reports SP0116.

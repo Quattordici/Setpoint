@@ -33,4 +33,5 @@ public sealed class GitHubProviderBlockDefinition : IProviderBlockDefinition
 [JsonSerializable(typeof(GitHubRequiredChecksOptions))]
 [JsonSerializable(typeof(IReadOnlyList<GitHubBypassActor>))]
 [JsonSerializable(typeof(IReadOnlyDictionary<string, GitHubTeamRole>))]
+[JsonSerializable(typeof(IReadOnlyDictionary<string, GitHubEnvironmentOptions>))]
 internal sealed partial class GitHubPolicyJsonContext : JsonSerializerContext;

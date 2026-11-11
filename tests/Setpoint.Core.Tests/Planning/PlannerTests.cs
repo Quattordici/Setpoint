@@ -303,6 +303,27 @@ public sealed class PlannerTests
     }
 
     /// <summary>
+    /// Given a rule the repo's platform plan doesn't offer, with a live value that differs from the policy,
+    /// when the repo is planned,
+    /// then the rule is left alone with its SP3002 warning, and the rest of the repo is still planned.
+    /// </summary>
+    [Fact(DisplayName = "👎 A rule the repo can't have is skipped with its warning")]
+    public async Task Plan_UnavailableRule_IsSkippedWithWarning()
+    {
+        // Arrange
+        _builder.WithBaseline(Baseline("minimumReviewers: { count: 2 }\n  requireCommentResolution: true"));
+        _adapter.AddRepo(Repo).WithLive("minimumReviewers", """{ "count": 1, "resetOnPush": false }""")
+            .Unavailable.Add(new RuleWarning("requireCommentResolution", Diagnostic.Warning(DiagnosticCodes.RuleUnavailable, "requireCommentResolution: not on this plan.")));
+
+        // Act
+        PlanResult result = await PlanAsync();
+
+        // Assert
+        result.Diagnostics.ShouldHaveSingleItem().Code.ShouldBe(DiagnosticCodes.RuleUnavailable);
+        Single(result).Changes.Select(c => c.Rule).ShouldBe(["minimumReviewers.count"]);
+    }
+
+    /// <summary>
     /// Given a rule that two live objects match,
     /// when the repo is planned,
     /// then SP2201 warns and nothing is created or changed for that rule.

@@ -159,6 +159,14 @@ public sealed class AzureDevOpsAdapter : IProviderAdapter, IDisposable
 
         _contexts[repo] = context;
         LiveSnapshot live = LiveReader.Read(context, project.Configurations, acl, Name);
+
+        // Environments on Azure DevOps arrive in #74; until then the rule is skipped with a warning, not ignored.
+        live = live with
+        {
+            Unavailable = [new RuleWarning("environments", Diagnostic.Warning(
+                DiagnosticCodes.RuleUnavailable,
+                "environments: this version of Setpoint doesn't manage Azure DevOps environments yet, so the rule is skipped for this repo."))],
+        };
         return repoAcl is null
             ? live with { UnknownRules = [.. live.UnknownRules, RepoAccessAcl.Access] }
             : live with { Objects = [.. live.Objects, .. RepoAccessAcl.Read(context.RepoToken, repoAcl, Name)] };

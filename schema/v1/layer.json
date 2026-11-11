@@ -181,6 +181,48 @@
             ]
           },
           "description": "Team and group permissions on the repo: a team slug (GitHub) or group name (Azure DevOps) to read, write, admin, or none to remove the access Setpoint manages. Principals not listed are left alone. A lower layer replaces the whole map."
+        },
+        "environments": {
+          "type": [
+            "object",
+            "null"
+          ],
+          "additionalProperties": {
+            "type": "object",
+            "properties": {
+              "enabled": {
+                "type": "boolean",
+                "description": "false removes the approvals, wait and branch restriction, and keeps the environment."
+              },
+              "reviewers": {
+                "type": [
+                  "array",
+                  "null"
+                ],
+                "items": {
+                  "type": "string"
+                },
+                "description": "Who must approve a deployment: team slugs on GitHub (users go in github.environments), group or user names on Azure DevOps. An empty list removes the approvals."
+              },
+              "waitMinutes": {
+                "type": [
+                  "integer",
+                  "null"
+                ],
+                "description": "Minutes to wait before a deployment starts, from 0 (none) to 43200 (30 days)."
+              },
+              "branches": {
+                "enum": [
+                  "default",
+                  "any",
+                  null
+                ],
+                "description": "Which branches may deploy: default (the default branch, or protected branches on GitHub) or any."
+              }
+            },
+            "additionalProperties": false
+          },
+          "description": "Deployment environments and their approvals, by environment name. Environments not listed are left alone; a missing one is created, and none is ever deleted. A lower layer replaces the whole map."
         }
       },
       "additionalProperties": false,
@@ -380,6 +422,36 @@
             ]
           },
           "description": "GitHub-only roles for the neutral access rule: a team slug to triage or maintain. A team can't be in both access and github.access."
+        },
+        "environments": {
+          "type": [
+            "object",
+            "null"
+          ],
+          "additionalProperties": {
+            "type": "object",
+            "properties": {
+              "users": {
+                "type": [
+                  "array",
+                  "null"
+                ],
+                "items": {
+                  "type": "string"
+                },
+                "description": "Users who must approve a deployment, by login. Teams go in the neutral reviewers; together at most 6. An empty list removes the user reviewers."
+              },
+              "preventSelfReview": {
+                "type": [
+                  "boolean",
+                  "null"
+                ],
+                "description": "true keeps the person who started a deployment from approving it."
+              }
+            },
+            "additionalProperties": false
+          },
+          "description": "GitHub-only options for the neutral environments rule, by environment name: users who must approve, and whether the person who started a deployment may approve it."
         }
       },
       "additionalProperties": false,

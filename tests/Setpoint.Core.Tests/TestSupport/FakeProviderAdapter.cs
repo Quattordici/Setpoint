@@ -70,7 +70,7 @@ internal sealed class FakeProviderAdapter(Platform platform = Platform.GitHub, I
                 new Dictionary<string, JsonNode?> { [o.Rule] = o.Value?.DeepClone() },
                 $"Fake {o.Rule} #{o.Id}")),
         ];
-        return Task.FromResult(new LiveSnapshot(objects, fake.Unmanaged, fake.Ambiguous, fake.Unknown, fake.Warnings));
+        return Task.FromResult(new LiveSnapshot(objects, fake.Unmanaged, fake.Ambiguous, fake.Unknown, fake.Warnings, fake.Unavailable));
     }
 
     public IReadOnlyList<DesiredObject> MapObjects(DesiredState desired, LiveSnapshot live) => _repos[desired.Repo].MappingFailure is { } failure
@@ -108,6 +108,8 @@ internal sealed class FakeProviderAdapter(Platform platform = Platform.GitHub, I
         public List<string> Unknown { get; } = [];
 
         public List<RuleWarning> Warnings { get; } = [];
+
+        public List<RuleWarning> Unavailable { get; } = [];
 
         public PolicyMappingException? MappingFailure { get; set; }
 

@@ -20,4 +20,5 @@ namespace Setpoint.Core.Policy.Loading;
 [JsonSerializable(typeof(IReadOnlyList<MergeType>))]
 [JsonSerializable(typeof(BooleanRule))]
 [JsonSerializable(typeof(IReadOnlyDictionary<string, AccessRole>))]
+[JsonSerializable(typeof(IReadOnlyDictionary<string, EnvironmentRule>))]
 internal sealed partial class PolicyJsonContext : JsonSerializerContext;

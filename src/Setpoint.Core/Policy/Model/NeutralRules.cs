@@ -5,7 +5,7 @@ namespace Setpoint.Core.Policy.Model;
 
 /// <summary>
 /// The neutral rules. Each means the same on every platform. The first five apply to the repo's default branch;
-/// <c>access</c> applies to the repo.
+/// <c>access</c> and <c>environments</c> apply to the repo.
 /// A layer that sets a rule replaces the value from the layers above wholesale; lists are replaced, never appended.
 /// </summary>
 public sealed record NeutralRules
@@ -19,6 +19,7 @@ public sealed record NeutralRules
         "allowedMergeTypes",
         "protectFromForcePushAndDelete",
         "access",
+        "environments",
     ];
 
     /// <summary>Approvals required before a pull request can complete.</summary>
@@ -53,6 +54,46 @@ public sealed record NeutralRules
     [Description("Team and group permissions on the repo: a team slug (GitHub) or group name (Azure DevOps) to read, write, admin, or none to remove the access Setpoint manages. Principals not listed are left alone. A lower layer replaces the whole map.")]
     [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingDefault)]
     public Declared<IReadOnlyDictionary<string, AccessRole>> Access { get; init; }
+
+    /// <summary>
+    /// Deployment environments and their approvals, by environment name. Only the environments listed are managed;
+    /// a missing one is created, and none is ever deleted. A lower layer replaces the whole map.
+    /// </summary>
+    [Description("Deployment environments and their approvals, by environment name. Environments not listed are left alone; a missing one is created, and none is ever deleted. A lower layer replaces the whole map.")]
+    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingDefault)]
+    public Declared<IReadOnlyDictionary<string, EnvironmentRule>> Environments { get; init; }
+}
+
+/// <summary>One environment in the <c>environments</c> rule. A field left out keeps its live value.</summary>
+public sealed record EnvironmentRule
+{
+    /// <summary>False removes the protection Setpoint manages and keeps the environment.</summary>
+    [Description("false removes the approvals, wait and branch restriction, and keeps the environment.")]
+    // A setter, not init: the source-generated reader would otherwise overwrite the initializer when the key is absent.
+    public bool Enabled { get; set; } = true;
+
+    /// <summary>Who must approve a deployment: team slugs on GitHub, group or user names on Azure DevOps.</summary>
+    [Description("Who must approve a deployment: team slugs on GitHub (users go in github.environments), group or user names on Azure DevOps. An empty list removes the approvals.")]
+    public IReadOnlyList<string>? Reviewers { get; init; }
+
+    /// <summary>Minutes to wait before a deployment starts, 0 for none.</summary>
+    [Description("Minutes to wait before a deployment starts, from 0 (none) to 43200 (30 days).")]
+    public int? WaitMinutes { get; init; }
+
+    /// <summary>Which branches may deploy.</summary>
+    [Description("Which branches may deploy: default (the default branch, or protected branches on GitHub) or any.")]
+    public DeploymentBranches? Branches { get; init; }
+}
+
+/// <summary>The branches that may deploy to an environment.</summary>
+[JsonConverter(typeof(StrictStringEnumConverter<DeploymentBranches>))]
+public enum DeploymentBranches
+{
+    /// <summary>The default branch; on GitHub, protected branches.</summary>
+    Default,
+
+    /// <summary>Any branch.</summary>
+    Any,
 }
 
 /// <summary>A neutral role on a repo, for the <c>access</c> rule.</summary>
