@@ -497,6 +497,8 @@ public sealed class PolicyRepoLoaderTests
     [InlineData("allowedMergeTypes: [fastForward]", "one of merge, squash, rebase")]
     [InlineData("allowedMergeTypes: [1]", "one of merge, squash, rebase")]
     [InlineData("access:\n    platform: owner", "one of none, read, write, admin")]
+    [InlineData("environments:\n    production: { branches: protected }", "one of default, any")]
+    [InlineData("environments:\n    production: { approvers: [platform] }", "Unknown key")]
     [InlineData("requireCommentResolution: yes", "true, false or { enabled: true|false }")]
     [InlineData("requiredChecks:\n    - title: ci", "Unknown key")]
     public void Load_WrongValueType_ReportsInvalidValue(string rule, string expectedText)

@@ -18,6 +18,7 @@ Fine-grained PATs and GitHub Apps use the same permission names.
 | `plan`, for `access` | + **Administration: read**, and **Members: read** on the organization | Read | Lists the repo's teams, and the organization's teams to check slugs (`SP0207`). Without the first, `access` is reported as unknown (`SP2202`). |
 | `apply` | **Administration: write** + Metadata: read + Contents: read | Admin, or a custom role with *Edit repository rules* | Creates, updates and deletes the `setpoint` ruleset. |
 | `apply`, for `access` | + **Members: read** on the organization | Organization owner, or a maintainer of each named team with admin on the repo | Adds the repo to a team with its role, or removes it. |
+| `apply`, for `environments` | + **Members: read** on the organization, to resolve team reviewers | Admin on the repo | Creates environments and sets their reviewers, wait timer and branch policy. Which permission lists them for `plan` (Actions or Environments: read) is unconfirmed. |
 
 A fine-grained PAT's resource owner must be the organization, and the organization may have to approve the token before it works on private repos.
 

@@ -3,6 +3,7 @@ using System.Runtime.CompilerServices;
 using System.Text.Json.Nodes;
 using Setpoint.Adapters.GitHub.Api;
 using Setpoint.Adapters.GitHub.Auth;
+using Setpoint.Adapters.GitHub.Environments;
 using Setpoint.Adapters.GitHub.Policy;
 using Setpoint.Adapters.GitHub.Rulesets;
 using Setpoint.Adapters.GitHub.Teams;
@@ -18,7 +19,8 @@ namespace Setpoint.Adapters.GitHub;
 /// <summary>
 /// The GitHub adapter. Setpoint owns one ruleset per repo, named <c>setpoint</c>, on the default branch; every other
 /// ruleset and the repo's own merge settings are unmanaged, and are only read to warn when they are stricter. It
-/// also owns the permission on the repo of each team the <c>access</c> rule names.
+/// also owns the permission on the repo of each team the <c>access</c> rule names, and the protection of each
+/// deployment environment the <c>environments</c> rule names.
 /// </summary>
 public sealed class GitHubAdapter : IProviderAdapter, IDisposable
 {
@@ -36,7 +38,9 @@ public sealed class GitHubAdapter : IProviderAdapter, IDisposable
     private readonly ConcurrentDictionary<RepoRef, GitHubRepository> _listed = new();
     private readonly ConcurrentDictionary<RepoRef, List<GitHubRulesetSummary>> _rulesets = new();
     private readonly ConcurrentDictionary<RepoRef, TeamContext> _teams = new();
-    private readonly ConcurrentDictionary<(string Target, string Org), Lazy<Task<IReadOnlySet<string>?>>> _orgTeams = new();
+    private readonly ConcurrentDictionary<(string Target, string Org), Lazy<Task<IReadOnlyDictionary<string, long>?>>> _orgTeams = new();
+    private readonly ConcurrentDictionary<(string Target, string Login), Lazy<Task<GitHubUser?>>> _users = new();
+    private readonly ConcurrentDictionary<RepoRef, IReadOnlyDictionary<string, long>> _environmentUsers = new();
 
     /// <summary>Creates the adapter.</summary>
     public GitHubAdapter(GitHubAdapterOptions? options = null) => _options = options ?? new GitHubAdapterOptions();
@@ -198,7 +202,29 @@ public sealed class GitHubAdapter : IProviderAdapter, IDisposable
         }
 
         _teams[repo] = await ReadTeamsAsync(session, repo, details.Owner, objects, unknown, cancellationToken).ConfigureAwait(false);
-        return new LiveSnapshot(objects, unmanaged, [], unknown);
+
+        // Environment approvals and wait timers on private repos need GitHub Enterprise, which a token can't tell
+        // from the other plans, so private repos leave environments alone.
+        var unavailable = new List<RuleWarning>();
+        if (details.Private)
+        {
+            unavailable.Add(new RuleWarning(EnvironmentProtection.Environments, Diagnostic.Warning(
+                DiagnosticCodes.RuleUnavailable,
+                "environments: required reviewers and wait timers on private repos need GitHub Enterprise, so environments are skipped for this repo.")));
+            unavailable.Add(new RuleWarning(EnvironmentProtection.GitHubEnvironments, Diagnostic.Warning(
+                DiagnosticCodes.RuleUnavailable,
+                "github.environments: required reviewers on private repos need GitHub Enterprise, so environments are skipped for this repo.")));
+        }
+        else if (await session.Api.ListEnvironmentsAsync(repo.Owner, repo.Name, cancellationToken).ConfigureAwait(false) is { } environments)
+        {
+            objects.AddRange(EnvironmentProtection.Read(environments));
+        }
+        else
+        {
+            unknown.AddRange(EnvironmentProtection.Rules);
+        }
+
+        return new LiveSnapshot(objects, unmanaged, [], unknown, null, unavailable);
     }
 
     /// <inheritdoc />
@@ -232,7 +258,54 @@ public sealed class GitHubAdapter : IProviderAdapter, IDisposable
         }
 
         TeamContext teams = _teams.GetValueOrDefault(desired.Repo) ?? new TeamContext(new GitHubAccount(desired.Repo.Owner), null);
-        return [new DesiredObject(MatchKey, CreateKey, rules, payload, $"{RulesetTitle} (new)"), .. TeamAccess.Map(desired.Rules, teams.Owner, teams.OrgTeams)];
+        IReadOnlySet<string>? orgTeams = teams.OrgTeamIds is null ? null : teams.OrgTeamIds.Keys.ToHashSet(StringComparer.Ordinal);
+        List<DesiredObject> objects = [new DesiredObject(MatchKey, CreateKey, rules, payload, $"{RulesetTitle} (new)"), .. TeamAccess.Map(desired.Rules, teams.Owner, orgTeams)];
+
+        // Environments are mapped only when the repo can have them and the token could read them.
+        bool environmentsKnown = !EnvironmentProtection.Rules.Any(r =>
+            live.UnknownRules.Contains(r) || (live.Unavailable ?? []).Any(u => u.Rule == r));
+        if (environmentsKnown)
+        {
+            IReadOnlyDictionary<string, long> users = _environmentUsers.GetValueOrDefault(desired.Repo) ?? new Dictionary<string, long>();
+            objects.AddRange(EnvironmentProtection.Map(desired.Rules, live, teams.Owner, teams.OrgTeamIds, users));
+        }
+
+        return objects;
+    }
+
+    /// <summary>
+    /// Looks up the users <c>github.environments</c> names, since environment reviewers are written by id. Each
+    /// login is looked up once per run.
+    /// </summary>
+    /// <exception cref="PolicyMappingException">A login is no GitHub user (SP0207).</exception>
+    public async Task<LiveSnapshot> PrepareAsync(DesiredState desired, LiveSnapshot live, CancellationToken cancellationToken)
+    {
+        if (desired.Rules.GetValueOrDefault(EnvironmentProtection.GitHubEnvironments)?.Value is not JsonObject declared)
+        {
+            return live;
+        }
+
+        Session session = SessionFor(desired.Repo.Target);
+        var users = new Dictionary<string, long>(StringComparer.Ordinal);
+        foreach (JsonNode? login in declared.Select(e => e.Value?["users"]).OfType<JsonArray>().SelectMany(a => a))
+        {
+            if (login is not JsonValue value || !value.TryGetValue(out string? text) || users.ContainsKey(text.ToLowerInvariant()))
+            {
+                continue;
+            }
+
+            GitHubUser? user = await _users
+                .GetOrAdd((desired.Repo.Target, text.ToLowerInvariant()), key => new Lazy<Task<GitHubUser?>>(() =>
+                    session.Api.FindUserAsync(key.Login, desired.Repo.Owner, cancellationToken)))
+                .Value.ConfigureAwait(false);
+            if (user is not null)
+            {
+                users[text.ToLowerInvariant()] = user.Id;
+            }
+        }
+
+        _environmentUsers[desired.Repo] = users;
+        return live;
     }
 
     // A repo's teams, each with its permission, as live objects. A token that may not list them leaves access
@@ -254,11 +327,11 @@ public sealed class GitHubAdapter : IProviderAdapter, IDisposable
             objects.AddRange(TeamAccess.Read(teams));
         }
 
-        IReadOnlySet<string>? orgTeams = await _orgTeams
-            .GetOrAdd((repo.Target, owner.Login.ToLowerInvariant()), key => new Lazy<Task<IReadOnlySet<string>?>>(async () =>
+        IReadOnlyDictionary<string, long>? orgTeams = await _orgTeams
+            .GetOrAdd((repo.Target, owner.Login.ToLowerInvariant()), key => new Lazy<Task<IReadOnlyDictionary<string, long>?>>(async () =>
                 (await session.Api.ListOrgTeamsAsync(owner.Login, cancellationToken).ConfigureAwait(false))?
-                    .Select(t => t.Slug.ToLowerInvariant())
-                    .ToHashSet(StringComparer.Ordinal)))
+                    .DistinctBy(t => t.Slug.ToLowerInvariant())
+                    .ToDictionary(t => t.Slug.ToLowerInvariant(), t => t.Id, StringComparer.Ordinal)))
             .Value.ConfigureAwait(false);
         return new TeamContext(owner, orgTeams);
     }
@@ -310,9 +383,14 @@ public sealed class GitHubAdapter : IProviderAdapter, IDisposable
             return await WriteTeamAsync(api, repo, slug, planned, cancellationToken).ConfigureAwait(false);
         }
 
+        if (EnvironmentProtection.IsMatchKey(planned.MatchKey))
+        {
+            return await WriteEnvironmentAsync(api, repo, planned, cancellationToken).ConfigureAwait(false);
+        }
+
         if (planned.MatchKey != MatchKey)
         {
-            return $"{planned.Key} is not the setpoint ruleset or a team's access; the GitHub adapter writes nothing else.";
+            return $"{planned.Key} is not the setpoint ruleset, a team's access or an environment; the GitHub adapter writes nothing else.";
         }
 
         long? id = RulesetId(planned.Key);
@@ -495,8 +573,48 @@ public sealed class GitHubAdapter : IProviderAdapter, IDisposable
         }
     }
 
-    /// <summary>What mapping the access rule needs to know about a repo: its owner, and the owner's team slugs if they could be listed.</summary>
-    private sealed record TeamContext(GitHubAccount Owner, IReadOnlySet<string>? OrgTeams);
+    // An environment's protection: PUT creates the environment or replaces its protection. Environments are never deleted.
+    private static async Task<string?> WriteEnvironmentAsync(GitHubApiClient api, RepoRef repo, PlanObject planned, CancellationToken cancellationToken)
+    {
+        string? name = EnvironmentProtection.NameInKey(planned.Key);
+        if (name is null || EnvironmentProtection.MatchKey(name) != planned.MatchKey
+            || planned.Operation == ObjectOperation.Delete || planned.Payload is not JsonObject payload)
+        {
+            return $"{planned.Key} isn't an environment Setpoint may write; environments are created or updated, never deleted. Nothing was written.";
+        }
+
+        HttpResponseMessage response;
+        try
+        {
+            response = await api.SetEnvironmentAsync(repo.Owner, repo.Name, name, payload, cancellationToken).ConfigureAwait(false);
+        }
+        catch (Exception ex) when (ex is not OperationCanceledException || !cancellationToken.IsCancellationRequested)
+        {
+            return ex.Message;
+        }
+
+        using (response)
+        {
+            if (response.IsSuccessStatusCode)
+            {
+                return null;
+            }
+
+            string body = await response.Content.ReadAsStringAsync(cancellationToken).ConfigureAwait(false);
+            string message = GitHubMessage(body) ?? response.ReasonPhrase ?? "no message";
+            const string permission = "The token needs Administration: write on the repo (a classic token needs the repo scope), and its account admin on the repo.";
+            return (int)response.StatusCode switch
+            {
+                403 => $"GitHub refused to write environment {name} (403: {message}). {permission}",
+                404 => $"GitHub couldn't find the repo to write environment {name} (404: {message}). {permission}",
+                422 => $"GitHub rejected environment {name} (422: {message}). Each reviewer needs read access to the repo.",
+                int status => $"Writing environment {name} failed ({status}: {message}).",
+            };
+        }
+    }
+
+    /// <summary>What mapping the access and environments rules need to know about a repo: its owner, and the owner's teams by slug if they could be listed.</summary>
+    private sealed record TeamContext(GitHubAccount Owner, IReadOnlyDictionary<string, long>? OrgTeamIds);
 
     private sealed record Session(GitHubApiClient Api, string Login, AppCredentials? App) : IDisposable
     {

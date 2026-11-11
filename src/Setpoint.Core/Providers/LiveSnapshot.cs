@@ -12,12 +12,17 @@ namespace Setpoint.Core.Providers;
 /// <param name="Ambiguous">Rules more than one live object matches. Setpoint leaves them alone and warns (SP2201).</param>
 /// <param name="UnknownRules">Rules whose live value the token can't see. Plan reports them as unknown (SP2202), not as changes.</param>
 /// <param name="Warnings">Warnings about live settings that undercut a rule, reported only when the policy sets that rule.</param>
+/// <param name="Unavailable">
+/// Rules the repo can't have on its platform plan, such as environment approvals on a private GitHub repo. Each is
+/// left alone, and its warning (SP3002) is reported when the policy sets it.
+/// </param>
 public sealed record LiveSnapshot(
     IReadOnlyList<LiveObject> Objects,
     IReadOnlyList<UnmanagedSetting> Unmanaged,
     IReadOnlyList<AmbiguousMatch> Ambiguous,
     IReadOnlyList<string> UnknownRules,
-    IReadOnlyList<RuleWarning>? Warnings = null)
+    IReadOnlyList<RuleWarning>? Warnings = null,
+    IReadOnlyList<RuleWarning>? Unavailable = null)
 {
     /// <summary>A repo with nothing on it.</summary>
     public static readonly LiveSnapshot Empty = new([], [], [], []);

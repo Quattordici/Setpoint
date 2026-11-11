@@ -16,6 +16,12 @@ public sealed class PolicyValidator(IReadOnlyList<IProviderBlockDefinition> prov
     /// <summary>The most reviewers a GitHub ruleset can require.</summary>
     public const int GitHubMaxReviewers = 10;
 
+    /// <summary>The most required reviewers, teams and users together, a GitHub environment allows.</summary>
+    public const int GitHubMaxEnvironmentReviewers = 6;
+
+    /// <summary>The longest wait an environment allows: 30 days.</summary>
+    public const int MaxWaitMinutes = 43200;
+
     /// <summary>Runs every offline check.</summary>
     public IReadOnlyList<Diagnostic> Validate(PolicyRepo policy)
     {
@@ -245,6 +251,29 @@ public sealed class PolicyValidator(IReadOnlyList<IProviderBlockDefinition> prov
                     DiagnosticCodes.TooManyReviewersForGitHub,
                     $"minimumReviewers count {reviewers.Count} applies to GitHub repos here, and GitHub rulesets allow at most {GitHubMaxReviewers}.",
                     at));
+            }
+        }
+
+        if (rules.Environments is { HasValue: true, Value: { } environments })
+        {
+            foreach ((string name, EnvironmentRule environment) in environments.Where(e => e.Value.Enabled))
+            {
+                SourceLocation at = source.Find(JsonPath.Property("$.rules.environments", name));
+                if (environment.WaitMinutes is < 0 or > MaxWaitMinutes)
+                {
+                    diagnostics.Add(Diagnostic.Error(
+                        DiagnosticCodes.InvalidEnvironment,
+                        $"environments: '{name}' waits {environment.WaitMinutes} minutes; waitMinutes must be from 0 to {MaxWaitMinutes} (30 days).",
+                        at));
+                }
+
+                if (environment.Reviewers is { Count: > GitHubMaxEnvironmentReviewers } many && reachable.Any(t => t.Platform == Platform.GitHub))
+                {
+                    diagnostics.Add(Diagnostic.Error(
+                        DiagnosticCodes.InvalidEnvironment,
+                        $"environments: '{name}' names {many.Count} reviewers and applies to GitHub repos here, where an environment allows at most {GitHubMaxEnvironmentReviewers}.",
+                        at));
+                }
             }
         }
 

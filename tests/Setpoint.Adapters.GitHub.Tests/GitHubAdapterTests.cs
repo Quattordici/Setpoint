@@ -303,7 +303,8 @@ public sealed class GitHubAdapterTests : IAsyncLifetime
             .BranchRules(Org, repo.Name, "main",
                 BranchRule("pull_request", setpoint.Id, """{"required_approving_review_count":2}"""),
                 BranchRule("required_status_checks", org.Id, """{"required_status_checks":[{"context":"sec-scan"}]}""", "Organization", Org))
-            .Teams(Org, repo.Name);
+            .Teams(Org, repo.Name)
+            .Environments(Org, repo.Name);
 
         // Act
         LiveSnapshot live = await _sut.ReadAsync(new RepoRef(TargetName, Org, repo.Name), TestContext.Current.CancellationToken);
@@ -334,7 +335,7 @@ public sealed class GitHubAdapterTests : IAsyncLifetime
         GitHubRepoBuilder repo = new GitHubRepoBuilder().WithOwner(Org).WithoutMergeFlags();
         RulesetBuilder setpoint = new RulesetBuilder().WithPullRequest().WithoutBypassActorsVisible();
         await DescribeWithRepoAsync(repo);
-        _api.Rulesets(Org, repo.Name, setpoint.Summary()).Ruleset(Org, repo.Name, setpoint.Build()).BranchRules(Org, repo.Name, "main").TeamsForbidden(Org, repo.Name);
+        _api.Rulesets(Org, repo.Name, setpoint.Summary()).Ruleset(Org, repo.Name, setpoint.Build()).BranchRules(Org, repo.Name, "main").TeamsForbidden(Org, repo.Name).Environments(Org, repo.Name);
 
         // Act
         LiveSnapshot live = await _sut.ReadAsync(new RepoRef(TargetName, Org, repo.Name), TestContext.Current.CancellationToken);

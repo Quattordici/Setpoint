@@ -31,6 +31,23 @@ public sealed record GitHubProviderBlock : IProviderBlock
     [Description("GitHub-only roles for the neutral access rule: a team slug to triage or maintain. A team can't be in both access and github.access.")]
     [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingDefault)]
     public Declared<IReadOnlyDictionary<string, GitHubTeamRole>> Access { get; init; }
+
+    /// <summary>GitHub-only options for the neutral environments rule, by environment name.</summary>
+    [Description("GitHub-only options for the neutral environments rule, by environment name: users who must approve, and whether the person who started a deployment may approve it.")]
+    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingDefault)]
+    public Declared<IReadOnlyDictionary<string, GitHubEnvironmentOptions>> Environments { get; init; }
+}
+
+/// <summary>The <c>github.environments.&lt;name&gt;</c> options. A field left out keeps its live value.</summary>
+public sealed record GitHubEnvironmentOptions
+{
+    /// <summary>Users who must approve a deployment, by login. They count toward the six reviewers an environment allows.</summary>
+    [Description("Users who must approve a deployment, by login. Teams go in the neutral reviewers; together at most 6. An empty list removes the user reviewers.")]
+    public IReadOnlyList<string>? Users { get; init; }
+
+    /// <summary>Whether the person who started a deployment is kept from approving it.</summary>
+    [Description("true keeps the person who started a deployment from approving it.")]
+    public bool? PreventSelfReview { get; init; }
 }
 
 /// <summary>A GitHub repository role with no neutral equivalent.</summary>

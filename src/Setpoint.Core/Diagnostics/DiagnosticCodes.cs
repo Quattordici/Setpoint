@@ -72,6 +72,9 @@ public static class DiagnosticCodes
     /// <summary>A repo override or exact selector names a repo outside its target's scope, so it can never apply.</summary>
     public const string OutsideScope = "SP0120";
 
+    /// <summary>An environment can't be written as declared: its wait is out of range, or it has more reviewers than the platform allows.</summary>
+    public const string InvalidEnvironment = "SP0121";
+
     // 02xx: selection.
 
     /// <summary>A selector glob matches no repo in scope.</summary>
@@ -129,6 +132,9 @@ public static class DiagnosticCodes
 
     /// <summary>A private repo on GitHub Free, where rulesets don't apply. It is skipped.</summary>
     public const string PrivateRepoOnGitHubFree = "SP3001";
+
+    /// <summary>A rule the repo's platform plan doesn't offer, such as environment approvals on a private GitHub repo. The rule is skipped.</summary>
+    public const string RuleUnavailable = "SP3002";
 
     // 40xx: apply guards.
 

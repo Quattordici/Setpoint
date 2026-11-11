@@ -119,7 +119,7 @@ internal sealed class GitHubApiStub(WireMockServer server, string token)
     /// <summary>Every team in an organization.</summary>
     public GitHubApiStub OrgTeams(string org, params string[] slugs)
     {
-        server.Given(Get($"/orgs/{org}/teams")).RespondWith(Json(new JsonArray([.. slugs.Select(s => (JsonNode)new JsonObject { ["slug"] = s, ["name"] = s })])));
+        server.Given(Get($"/orgs/{org}/teams")).RespondWith(Json(new JsonArray([.. slugs.Select(s => (JsonNode)new JsonObject { ["id"] = TeamId(s), ["slug"] = s, ["name"] = s })])));
         return this;
     }
 
@@ -136,6 +136,50 @@ internal sealed class GitHubApiStub(WireMockServer server, string token)
                 .RespondWith(body is null ? response : response.WithHeader("Content-Type", "application/json; charset=utf-8").WithBody(body));
         }
 
+        return this;
+    }
+
+    /// <summary>The id <see cref="OrgTeams"/> gives a team: the same for the same slug in every test.</summary>
+    public static long TeamId(string slug) => 1000 + slug.Aggregate(0L, (sum, c) => (sum * 31) + c) % 100000;
+
+    /// <summary>A repo's deployment environments, as GitHub lists them.</summary>
+    public GitHubApiStub Environments(string owner, string repo, params JsonObject[] environments)
+    {
+        server.Given(Get($"/repos/{owner}/{repo}/environments"))
+            .RespondWith(Json(new JsonObject
+            {
+                ["total_count"] = environments.Length,
+                ["environments"] = new JsonArray([.. environments.Select(e => (JsonNode)e.DeepClone())]),
+            }));
+        return this;
+    }
+
+    /// <summary>What a token that may not list a repo's environments gets: 403.</summary>
+    public GitHubApiStub EnvironmentsForbidden(string owner, string repo)
+    {
+        server.Given(Get($"/repos/{owner}/{repo}/environments"))
+            .RespondWith(Response.Create().WithStatusCode(403).WithBody("""{"message":"Resource not accessible by personal access token"}"""));
+        return this;
+    }
+
+    /// <summary>Answers creating or updating an environment (PUT).</summary>
+    public GitHubApiStub EnvironmentWrites(string owner, string repo, int status = 200, string? body = null)
+    {
+        IResponseBuilder response = Response.Create().WithStatusCode(status)
+            .WithHeader("Content-Type", "application/json; charset=utf-8")
+            .WithBody(body ?? "{}");
+        server.Given(Request.Create()
+                .WithPath(new WireMock.Matchers.WildcardMatcher($"{Root}/repos/{owner}/{repo}/environments/*"))
+                .UsingPut()
+                .WithHeader("Authorization", $"Bearer {token}"))
+            .RespondWith(response);
+        return this;
+    }
+
+    /// <summary>A GitHub user, found by login. Any other login gets 404.</summary>
+    public GitHubApiStub UserByLogin(string login, long id)
+    {
+        server.Given(Get($"/users/{login}")).RespondWith(Json(new JsonObject { ["login"] = login, ["id"] = id }));
         return this;
     }
 

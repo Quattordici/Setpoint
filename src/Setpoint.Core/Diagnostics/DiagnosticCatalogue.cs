@@ -31,6 +31,7 @@ public static class DiagnosticCatalogue
         new(DiagnosticCodes.IncompleteTarget, DiagnosticSeverity.Error, "Incomplete target"),
         new(DiagnosticCodes.RedundantEnabledForm, DiagnosticSeverity.Warning, "Redundant enabled form"),
         new(DiagnosticCodes.OutsideScope, DiagnosticSeverity.Warning, "Repo outside target scope"),
+        new(DiagnosticCodes.InvalidEnvironment, DiagnosticSeverity.Error, "Invalid environment"),
         new(DiagnosticCodes.SelectorMatchesNothing, DiagnosticSeverity.Warning, "Selector matches nothing"),
         new(DiagnosticCodes.RepoNotFound, DiagnosticSeverity.Error, "Repo not found"),
         new(DiagnosticCodes.ArchivedRepoSkipped, DiagnosticSeverity.Info, "Archived repo skipped"),
@@ -47,6 +48,7 @@ public static class DiagnosticCatalogue
         new(DiagnosticCodes.AmbiguousMatch, DiagnosticSeverity.Warning, "Ambiguous live match"),
         new(DiagnosticCodes.LiveValueUnknown, DiagnosticSeverity.Warning, "Live value unknown"),
         new(DiagnosticCodes.PrivateRepoOnGitHubFree, DiagnosticSeverity.Warning, "Private repo on GitHub Free skipped"),
+        new(DiagnosticCodes.RuleUnavailable, DiagnosticSeverity.Warning, "Rule not available on this repo"),
         new(DiagnosticCodes.StalePlan, DiagnosticSeverity.Error, "Plan is stale"),
         new(DiagnosticCodes.TooManyChanges, DiagnosticSeverity.Error, "Too many changes"),
     ];
