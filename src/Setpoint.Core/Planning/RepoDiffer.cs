@@ -171,6 +171,15 @@ public static class RepoDiffer
             unmanaged.Add(new PlanUnmanaged(setting.Rule, setting.Source, ValueText.Format(setting.Value)));
             if (desired.Rules.TryGetValue(setting.Rule, out DesiredRule? declared) && Strictness.IsStricter(setting.Rule, setting.Value, declared.Value))
             {
+                if (setting.Rule == "access")
+                {
+                    diagnostics.Add(Diagnostic.Warning(
+                        DiagnosticCodes.UnmanagedStricter,
+                        $"access: unmanaged {setting.Source} grants {ValueText.Format(setting.Value)}, more than the policy's " +
+                        $"{ValueText.Format(declared.Value)}; that access still applies, because Setpoint doesn't take it away."));
+                    continue;
+                }
+
                 diagnostics.Add(Diagnostic.Warning(
                     DiagnosticCodes.UnmanagedStricter,
                     $"{setting.Rule}: unmanaged {setting.Source} sets {ValueText.Format(setting.Value)}, stricter than the policy's " +

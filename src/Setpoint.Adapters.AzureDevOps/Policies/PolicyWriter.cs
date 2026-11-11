@@ -50,8 +50,9 @@ internal static class PolicyWriter
 
     private static async Task<string?> WriteAsync(AzureDevOpsApiClient api, RepoContext context, PlanObject planned, CancellationToken cancellationToken)
     {
-        bool isAcl = planned.MatchKey == ForcePushAcl.MatchKey(context.RefName);
-        if (Refusal(context, planned, isAcl) is { } refusal)
+        bool isAccess = RepoAccessAcl.IsMatchKey(planned.MatchKey);
+        bool isAcl = isAccess || planned.MatchKey == ForcePushAcl.MatchKey(context.RefName);
+        if ((isAccess ? AccessRefusal(context, planned) : Refusal(context, planned, isAcl)) is { } refusal)
         {
             return refusal;
         }
@@ -84,6 +85,16 @@ internal static class PolicyWriter
         {
             return await ErrorAsync(response, planned, isAcl, cancellationToken).ConfigureAwait(false);
         }
+    }
+
+    // An access entry must be on this repo's token, for the identity its match key names, and touch only role bits.
+    private static string? AccessRefusal(RepoContext context, PlanObject planned)
+    {
+        bool ok = planned.Payload is JsonObject payload
+            && string.Equals(PolicyMapper.Text(payload["token"]), context.RepoToken, StringComparison.OrdinalIgnoreCase)
+            && ForcePushAcl.FromPayload(payload) is { } entry
+            && RepoAccessAcl.MatchKey(entry.Descriptor) == planned.MatchKey;
+        return ok ? null : $"{planned.Key} isn't a permission entry on {context.Repo.Name}'s repo token; nothing was written.";
     }
 
     // Checks that the planned object is one Setpoint owns on this repo's default branch, before anything is sent.
@@ -138,7 +149,7 @@ internal static class PolicyWriter
             return null;
         }
 
-        string what = isAcl ? "the Force push entry" : planned.Key;
+        string what = isAcl ? (RepoAccessAcl.IsMatchKey(planned.MatchKey) ? $"the permission entry {planned.Key}" : "the Force push entry") : planned.Key;
         string permission = isAcl ? AclPermission : PolicyPermission;
         if (response.StatusCode == HttpStatusCode.NonAuthoritativeInformation)
         {

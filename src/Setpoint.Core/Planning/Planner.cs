@@ -216,8 +216,9 @@ public sealed class Planner
                 return Finish(PlanRepoStatus.Skipped, null, [unsupported]);
             }
 
-            LiveSnapshot live = await adapter.ReadAsync(repo, cancellationToken);
+            LiveSnapshot read = await adapter.ReadAsync(repo, cancellationToken);
             DesiredState desired = DesiredStateBuilder.Build(effective, adapter);
+            LiveSnapshot live = await adapter.PrepareAsync(desired, read, cancellationToken);
             RepoDiff diff = RepoDiffer.Diff(desired, live, adapter.MapObjects(desired, live));
             return Finish(diff.Objects.Count > 0 ? PlanRepoStatus.Changes : PlanRepoStatus.InSync, diff, diff.Diagnostics);
         }

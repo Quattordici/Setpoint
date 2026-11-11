@@ -26,6 +26,8 @@ public sealed class AzureDevOpsAdapter : IProviderAdapter, IDisposable
     private readonly ConcurrentDictionary<RepoRef, AdoRepository> _listed = new();
     private readonly ConcurrentDictionary<RepoRef, RepoContext> _contexts = new();
     private readonly ConcurrentDictionary<(string Target, string Project), Lazy<Task<ProjectState>>> _projects = new();
+    private readonly ConcurrentDictionary<(string Target, string Project, string Name), Lazy<Task<List<AdoIdentity>?>>> _identities = new();
+    private readonly ConcurrentDictionary<(string Target, string Project), Lazy<Task<JsonObject?>>> _projectAcls = new();
 
     /// <summary>Creates the adapter.</summary>
     public AzureDevOpsAdapter(AzureDevOpsAdapterOptions? options = null) => _options = options ?? new AzureDevOpsAdapterOptions();
@@ -151,10 +153,46 @@ public sealed class AzureDevOpsAdapter : IProviderAdapter, IDisposable
 
         var context = new RepoContext(listed, project.Pipelines, project.ValidUsersDescriptor);
         JsonObject? acl = await session.Api.GetAccessControlListAsync(ForcePushAcl.NamespaceId, context.BranchToken, cancellationToken).ConfigureAwait(false);
-        Dictionary<string, string> names = await IdentityNamesAsync(session, acl, cancellationToken).ConfigureAwait(false);
+        JsonObject? repoAcl = await session.Api.GetAccessControlListAsync(ForcePushAcl.NamespaceId, context.RepoToken, cancellationToken).ConfigureAwait(false);
+        Dictionary<string, string> names = await IdentityNamesAsync(session, [acl, repoAcl], cancellationToken).ConfigureAwait(false);
+        string Name(string descriptor) => names.GetValueOrDefault(descriptor) ?? descriptor;
 
         _contexts[repo] = context;
-        return LiveReader.Read(context, project.Configurations, acl, d => names.GetValueOrDefault(d) ?? d);
+        LiveSnapshot live = LiveReader.Read(context, project.Configurations, acl, Name);
+        return repoAcl is null
+            ? live with { UnknownRules = [.. live.UnknownRules, RepoAccessAcl.Access] }
+            : live with { Objects = [.. live.Objects, .. RepoAccessAcl.Read(context.RepoToken, repoAcl, Name)] };
+    }
+
+    /// <summary>
+    /// Resolves each name the access rule uses to an identity: a bare name is looked up in the repo's project
+    /// (<c>Contributors</c> is <c>[Payments]\Contributors</c>), a name with a backslash as written. Permissions the
+    /// project gives those identities are added as unmanaged, because every repo in the project inherits them.
+    /// </summary>
+    /// <exception cref="PolicyMappingException">A name matches no identity, or several (SP0207).</exception>
+    public async Task<LiveSnapshot> PrepareAsync(DesiredState desired, LiveSnapshot live, CancellationToken cancellationToken)
+    {
+        if (desired.Rules.GetValueOrDefault(RepoAccessAcl.Access)?.Value is not JsonObject { Count: > 0 } declared
+            || live.UnknownRules.Contains(RepoAccessAcl.Access)
+            || !_contexts.TryGetValue(desired.Repo, out RepoContext? context))
+        {
+            return live;
+        }
+
+        Session session = SessionFor(desired.Repo.Target);
+        AdoProject project = context.Repo.Project;
+        var principals = new Dictionary<string, Principal>(StringComparer.Ordinal);
+        foreach ((string written, _) in declared)
+        {
+            principals[written] = await ResolveAsync(session, desired.Repo.Target, project, written, cancellationToken).ConfigureAwait(false);
+        }
+
+        _contexts[desired.Repo] = context with { Principals = principals };
+        JsonObject? projectAcl = await _projectAcls
+            .GetOrAdd((desired.Repo.Target, project.Id), key => new Lazy<Task<JsonObject?>>(() =>
+                session.Api.GetAccessControlListAsync(ForcePushAcl.NamespaceId, RepoAccessAcl.ProjectToken(project.Id), cancellationToken)))
+            .Value.ConfigureAwait(false);
+        return live with { Unmanaged = [.. live.Unmanaged, .. RepoAccessAcl.Inherited(projectAcl, principals, project.Name)] };
     }
 
     /// <summary>Maps the desired state to policy configurations and the Force push entry. It makes no calls.</summary>
@@ -199,10 +237,40 @@ public sealed class AzureDevOpsAdapter : IProviderAdapter, IDisposable
         return new ProjectState(configurations, pipelines, validUsers?.FirstOrDefault()?.Descriptor);
     }
 
-    private static async Task<Dictionary<string, string>> IdentityNamesAsync(Session session, JsonObject? acl, CancellationToken cancellationToken)
+    private async Task<Principal> ResolveAsync(Session session, string target, AdoProject project, string written, CancellationToken cancellationToken)
+    {
+        string filter = written.Contains('\\', StringComparison.Ordinal) ? written : $"[{project.Name}]\\{written}";
+        List<AdoIdentity>? found = await _identities
+            .GetOrAdd((target, project.Id, filter.ToLowerInvariant()), key => new Lazy<Task<List<AdoIdentity>?>>(() =>
+                session.IdentityApi.SearchIdentitiesAsync(filter, cancellationToken)))
+            .Value.ConfigureAwait(false);
+        if (found is null)
+        {
+            throw new PolicyMappingException(
+                DiagnosticCodes.PrincipalNotFound,
+                $"access: the token may not look up identities, so '{written}' can't be resolved. It needs Identity (read) (vso.identity).");
+        }
+
+        AdoIdentity[] candidates = [.. found.Where(i => i.Descriptor is not null)];
+        AdoIdentity[] exact = [.. candidates.Where(i => string.Equals(DisplayName(i), filter, StringComparison.OrdinalIgnoreCase))];
+        return (exact.Length > 0 ? exact : candidates) switch
+        {
+            [var only] => new Principal(DisplayName(only) ?? filter, only.Descriptor!),
+            [] => throw new PolicyMappingException(
+                DiagnosticCodes.PrincipalNotFound,
+                $"access: no group or user is named '{filter}'. Use the group's name in project {project.Name}, or [Scope]\\Name for one outside it."),
+            var several => throw new PolicyMappingException(
+                DiagnosticCodes.PrincipalNotFound,
+                $"access: {several.Length} identities match '{filter}' ({string.Join(", ", several.Select(i => DisplayName(i) ?? i.Descriptor))}). Write the name as [Scope]\\Name so only one matches."),
+        };
+    }
+
+    private static string? DisplayName(AdoIdentity identity) => identity.CustomDisplayName ?? identity.ProviderDisplayName;
+
+    private static async Task<Dictionary<string, string>> IdentityNamesAsync(Session session, IEnumerable<JsonObject?> acls, CancellationToken cancellationToken)
     {
         var names = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
-        string[] descriptors = acl is null ? [] : [.. ForcePushAcl.Entries(acl).Select(e => e.Descriptor)];
+        string[] descriptors = [.. acls.OfType<JsonObject>().SelectMany(ForcePushAcl.Entries).Select(e => e.Descriptor).Distinct(StringComparer.OrdinalIgnoreCase)];
         foreach (AdoIdentity identity in await session.IdentityApi.GetIdentitiesAsync(descriptors, cancellationToken).ConfigureAwait(false) ?? [])
         {
             if (identity.Descriptor is { } descriptor && (identity.CustomDisplayName ?? identity.ProviderDisplayName) is { } name)

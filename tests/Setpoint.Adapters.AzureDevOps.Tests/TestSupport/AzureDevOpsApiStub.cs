@@ -125,6 +125,14 @@ internal sealed class AzureDevOpsApiStub(WireMockServer server, string token)
         return this;
     }
 
+    /// <summary>The identities a general search for <paramref name="filterValue"/> returns.</summary>
+    public AzureDevOpsApiStub IdentitySearch(string filterValue, params (string Descriptor, string Name)[] identities)
+    {
+        server.Given(Versioned("/_apis/identities").WithParam("searchFilter", "General").WithParam("filterValue", filterValue))
+            .RespondWith(Json(List(new JsonArray([.. identities.Select(i => (JsonNode)Identity(i.Descriptor, i.Name))]))));
+        return this;
+    }
+
     /// <summary>The identities a descriptor lookup returns.</summary>
     public AzureDevOpsApiStub Identities(params (string Descriptor, string Name)[] identities)
     {
